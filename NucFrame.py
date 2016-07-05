@@ -6,6 +6,7 @@ import logging
 from tqdm import tqdm
 
 from distance_utils.all_pairs_euc_dist import nuc_dist_pairs
+from Chromosome import Chromosome
 
 
 class NucFrame(object):
@@ -88,6 +89,10 @@ class NucFrame(object):
     chrm_parts = nuc["structures"]["0"]["particles"]
     for chrm in chrms:
       positions = chrm_parts[chrm]["positions"][:]
+
+      if np.all(np.sort(positions) != positions):
+        raise ValueError("Positions not in sorted order.")
+
       store.create_dataset(os.path.join("bp_pos", chrm), data=positions)
       logging.info("Stored basepair positions for chrm {} in {}".format(
           chrm, store["name"]))
@@ -149,28 +154,39 @@ class NucFrame(object):
     bin_size :: Int -- the common bin_size of the nuc files.
     chrms :: ["X", "1", ..] -- all of the chromosomes that are present.
     bp_pos/chrm :: [Int] -- The start bp index of each particle in each chrm.
+    position/chrm :: [[[Float]]] -- (model, bead_idx, xyz)
     expr_contacts/chrm/chrm :: [[Int]] -- (bead_idx, bead_idx), raw contact count.
     dists/chrm/chrm :: [[Float]] -- (bead_idx, bead_idx), distanes between beads.
-    position/chrm :: [[[Float]]] -- (model, bead_idx, xyz)
     """
 
-    store = h5py.File(nuc_slice_file, 'a', libvar="latest")
-    if nuc_slice_file and nuc_file:
-      # Create new nuc_slice_file from nuc_file
-      try:
-        os.remove(frame_file)
-      except OSError:
-        # File didn't actually exist.
-        pass
-      store["bin_size"] = self._get_bin_size(nuc_file)
+    self.store = h5py.File(nuc_slice_file, 'r', libvar="latest")
+    chromosomes = [x.decode("utf-8") for x in self.store["chrms"]]
+    chrm_limit_dict = {chrm: (None, None) for chrm in chromosomes}
+    self.chromosomes = Chromosomes(self.store, chromosomes, chrm_limit_dict)
 
-      store["chrms"] = self._extract_chrms(nuc_files)
 
-    # Store is now created, set variables.
+class Chromosomes(object):
+  def __init__(self, store, chromosomes, chrm_limit_dict):
+    self.store = store
+    self.chromosomes = chromosomes
+    self.chrm_limit_dict = chrm_limit_dict
+
+  def __getitem__(self, chrm):
+    lower, upper = self.chrm_limit_dict[chrm]
+    return(Chromosome(self.store, chrm, lower, upper))
+
+  def __iter__(self):
+    for chrm in self.chromosomes:
+      lower, upper = self.chrm_limit_dict[chrm]
+      yield(Chromosome(self.store, chrm, lower, upper))
 
 if __name__=="__main__":
   import glob
 
   nuc_file = "/home/lpa24/dev/cam/data/edl_chromo/mm10/single_cell_nuc_100k/Q5_ambig_10x_100kb.nuc"
   slice_file = "/mnt/SSD/LayeredNuc/Q5_ambig_100kb"
-  nf = NucFrame.from_nuc(nuc_file, slice_file)
+  # nf = NucFrame.from_nuc(nuc_file, slice_file)
+  nf = NucFrame(slice_file)
+
+  for c in nf.chromosomes:
+    print(c.expr_contacts.shape)
