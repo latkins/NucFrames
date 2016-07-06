@@ -13,17 +13,10 @@ class NucFrame(object):
   """
   Class to represent a Nuc file, in a consistent fashion.
 
-
-  -- Derived from the structure of a .nuc file.
   -- Used by a NucFrame
   -- Calculates the maximum information possible (e.g. all distances)
   -- Somehow allow initialisation with allowed basepair limits.
   -- All getters / setters should then use these limits to return the appropriate stuff.
-
-
-  -- How to deal with getting valid positions etc? Mapping basepairs to positions?
-     -- Mapping bp ranges to positions?
-     -- Dealing with values?
 
   """
 
@@ -148,7 +141,7 @@ class NucFrame(object):
       logging.info("Created positions for chrm {} in {}".format(chrm, store[
           "name"]))
 
-  def __init__(self, nuc_slice_file):
+  def __init__(self, nuc_slice_file, chrm_limit_dict=None):
     """HDF5 hierarchy:
     name :: String -- the name of the NucFrame
     bin_size :: Int -- the common bin_size of the nuc files.
@@ -158,17 +151,18 @@ class NucFrame(object):
     expr_contacts/chrm/chrm :: [[Int]] -- (bead_idx, bead_idx), raw contact count.
     dists/chrm/chrm :: [[Float]] -- (bead_idx, bead_idx), distanes between beads.
     """
-
     self.store = h5py.File(nuc_slice_file, 'r', libvar="latest")
     chromosomes = [x.decode("utf-8") for x in self.store["chrms"]]
-    chrm_limit_dict = {chrm: (None, None) for chrm in chromosomes}
-    self.chromosomes = Chromosomes(self.store, chromosomes, chrm_limit_dict)
+    if not chrm_limit_dict:
+      chrm_limit_dict = {chrm: (None, None) for chrm in chromosomes}
+
+    self.chrms = Chromosomes(self.store, chromosomes, chrm_limit_dict)
 
 
 class Chromosomes(object):
   def __init__(self, store, chromosomes, chrm_limit_dict):
     self.store = store
-    self.chromosomes = chromosomes
+    self.chrms = chromosomes
     self.chrm_limit_dict = chrm_limit_dict
 
   def __getitem__(self, chrm):
@@ -176,7 +170,7 @@ class Chromosomes(object):
     return(Chromosome(self.store, chrm, lower, upper))
 
   def __iter__(self):
-    for chrm in self.chromosomes:
+    for chrm in self.chrms:
       lower, upper = self.chrm_limit_dict[chrm]
       yield(Chromosome(self.store, chrm, lower, upper))
 
@@ -184,9 +178,9 @@ if __name__=="__main__":
   import glob
 
   nuc_file = "/home/lpa24/dev/cam/data/edl_chromo/mm10/single_cell_nuc_100k/Q5_ambig_10x_100kb.nuc"
-  slice_file = "/mnt/SSD/LayeredNuc/Q5_ambig_100kb"
+  slice_file = "/mnt/SSD/LayeredNuc/Q5_ambig_100kb.hdf5"
   # nf = NucFrame.from_nuc(nuc_file, slice_file)
   nf = NucFrame(slice_file)
 
   for c in nf.chromosomes:
-    print(c.expr_contacts.shape)
+    print(c.dists.shape)
