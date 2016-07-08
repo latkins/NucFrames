@@ -6,6 +6,7 @@ import logging
 from tqdm import tqdm
 
 from distance_utils.all_pairs_euc_dist import nuc_dist_pairs
+from depth_utils.alpha_shape import alpha_shape
 from Chromosome import Chromosome
 
 
@@ -182,5 +183,10 @@ if __name__=="__main__":
   # nf = NucFrame.from_nuc(nuc_file, slice_file)
   nf = NucFrame(slice_file)
 
-  for c in nf.chromosomes:
-    print(c.dists.shape)
+  coords = []
+  for c in nf.chrms:
+    coords.append(c.positions[0, :, :])
+
+  coords = np.vstack(coords)
+
+  alpha_shape(coords, 5)
