@@ -189,4 +189,4 @@ if __name__=="__main__":
 
   coords = np.vstack(coords)
 
-  alpha_shape(coords, 5)
+  alpha_shape(coords)
