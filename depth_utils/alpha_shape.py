@@ -65,7 +65,11 @@ def alpha_shape(points):
       b_val = max({simplex_b[s] for s in super_simplices})
       simplex_b[simplex] = b_val
 
-  return(simplex_a, simplex_b)
+  """
+  TODO:
+  Use networkx to construct the surface. Find disconnected surfaces, determine if one is internal.
+  """
+  return(simplex_a, simplex_b, coords)
 
 
 class SuperSimplexLookup(object):
