@@ -6,7 +6,7 @@ import numpy as np
 
 from itertools import combinations
 
-from point_surface_dist import point_project, point_tri_dists
+from .point_surface_dist import point_project, point_tri_dists
 
 @st.composite
 def flat_tri(draw):
@@ -83,22 +83,23 @@ def test_inner(flat_tri, height):
 @given(flat_tri(), st.integers(min_value=-1000, max_value=1000))
 def test_dists(flat_tri, height):
   height = float(height)
+
+  # All triangles have z = 1 to stop some errors.
   # On a point
   for point in flat_tri:
     dists = point_tri_dists(flat_tri[None,:,:], point[None, :])
-    print("on point", point, dists)
+    assert(np.allclose(np.abs(dists), 0))
 
   for (a, b) in combinations(range(flat_tri.shape[0]), 2):
     # In an edge
-    e = flat_tri[a] - flat_tri[b]
-    e_mid = e / 2
+    e_mid = np.mean(np.array([flat_tri[a], flat_tri[b]]), axis=0)
     dists = point_tri_dists(flat_tri[None,:,:], e_mid[None, :])
-    print(a, b, dists)
+    assert(np.allclose(np.abs(dists), 0))
 
     # Above an edge
     e_mid[-1] += height
     dists = point_tri_dists(flat_tri[None,:,:], e_mid[None, :])
-    print(dists, height)
+    assert(np.allclose(np.abs(dists), np.abs([height])))
 
     # Outside an edge
     # ...
@@ -106,12 +107,12 @@ def test_dists(flat_tri, height):
   # In the middle
   mid = np.mean(flat_tri, axis=0)
   dists = point_tri_dists(flat_tri[None,:,:], mid[None, :])
-  print("mid", dists)
+  assert(np.allclose(np.abs(dists), 0))
 
   # Above the middle
   mid[-1] += height
   dists = point_tri_dists(flat_tri[None,:,:], mid[None, :])
-  print(dists, height)
+  assert(np.allclose(np.abs(dists), np.abs([height])))
 
 if __name__=="__main__":
   with settings(max_examples=100000):

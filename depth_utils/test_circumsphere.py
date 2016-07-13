@@ -3,13 +3,13 @@ from hypothesis import given
 import hypothesis.strategies as s
 from itertools import combinations
 
-from alpha_shape import circumsphere, circumcircle
+from .circumsphere import _circumsphere, _circumcircle
 
 def regular_tetrahedron_coords(radius):
   """
   For a given radius, calculate a regular tetrahedron with a
-  circumsphere of that radius.
-  The calculated circumsphere should equal the original radius.
+  _circumsphere of that radius.
+  The calculated _circumsphere should equal the original radius.
   """
   a = (4 * radius) / np.sqrt(6)
 
@@ -22,14 +22,14 @@ def regular_tetrahedron_coords(radius):
 def test_circumsphere_sphere(radius):
   coords = regular_tetrahedron_coords(radius)
 
-  result = circumsphere(coords)
+  c, r = _circumsphere(coords)
 
-  np.testing.assert_almost_equal(result, radius, decimal=5)
+  np.testing.assert_almost_equal(r, radius, decimal=5)
 
   tri_max = 0
   for indices in combinations(range(4), 3):
     tri = coords[indices, :]
-    tri_alpha = circumcircle(tri)
+    _, tri_alpha = _circumcircle(tri)
     if tri_alpha > tri_max:
       tri_max = tri_alpha
 

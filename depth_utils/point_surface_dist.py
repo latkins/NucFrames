@@ -30,7 +30,7 @@ def point_tri_dists(facets, points):
   v2 = (p32 / p32_norm[:, None]) + (p12 / p12_norm[:, None])
   v3 = (p13 / p13_norm[:, None]) + (p23 / p23_norm[:, None])
 
-  np_ = np.cross(p12, p13)
+  np_ = np.cross(p12, p13, axis=1)
 
   np_norm = np.linalg.norm(np_, axis=1)
   """
@@ -51,10 +51,10 @@ def point_tri_dists(facets, points):
     p01 = p1 - p0
     p02 = p2 - p0
     p03 = p3 - p0
-    p10_norm = np.linalg.norm(p10, axis=1)
-    p01_norm = np.linalg.norm(p01, axis=1)
-    p02_norm = np.linalg.norm(p02, axis=1)
-    p03_norm = np.linalg.norm(p03, axis=1)
+    p10_norm = np.sqrt(inner1d(p10, p10))
+    p01_norm = p10_norm
+    p02_norm = np.sqrt(inner1d(p02, p02))
+    p03_norm = np.sqrt(inner1d(p03, p03))
 
     # Projection onto plane.
     p0i, p00i, p00i_norm = point_project(p0, p10, p01_norm, np_, np_norm)
@@ -65,9 +65,9 @@ def point_tri_dists(facets, points):
     p10i = p0i - p1
     p20i = p0i - p2
     p30i = p0i - p3
-    p0i1_norm = np.linalg.norm(p0i1, axis=1)
-    p0i2_norm = np.linalg.norm(p0i2, axis=1)
-    p0i3_norm = np.linalg.norm(p0i3, axis=1)
+    p0i1_norm = np.sqrt(inner1d(p0i1, p0i1))
+    p0i2_norm = np.sqrt(inner1d(p0i2, p0i2))
+    p0i3_norm = np.sqrt(inner1d(p0i3, p0i3))
 
     # Is it anticlockwise of v{1,2,3} ?
     f1 = inner1d(np.cross(v1, p0i1), np_) > 0
@@ -92,7 +92,8 @@ def point_tri_dists(facets, points):
                                     p1_norm[m31], p03_norm[m31],
                                     p01_norm[m31], p0i3[m31], p0i3_norm[m31],
                                     p0i1[m31], np_[m31], p00i_norm[m31])
-    return (distances)
+    all_dists.append(distances)
+  return (np.array(all_dists))
 
 
 def point_project(p0, p10, p01_norm, np_, np_norm):
@@ -112,13 +113,16 @@ def point_project(p0, p10, p01_norm, np_, np_norm):
   p00i_norm: Norm (aka length) of the point to the intersection point. (n_triangles, )
 
   """
-  cos_alpha = inner1d(p10, np_) / (p01_norm * np_norm)
+  with np.errstate(divide="ignore", invalid="ignore"):
+    cos_alpha = inner1d(p10, np_) / (p01_norm * np_norm)
 
-  p00i_norm = p01_norm * cos_alpha
-  p00i = (-1 * p00i_norm)[:, None] * (np_ / np_norm[:, None])
-  p0i = p0 + p00i
+    p00i_norm = p01_norm * cos_alpha
+    # Deal with the special case that p0 == p1
+    p00i_norm[np.isnan(cos_alpha)] = 0.0
+    p00i = (-1 * p00i_norm)[:, None] * (np_ / np_norm[:, None])
+    p0i = p0 + p00i
 
-  return (p0i, p00i, p00i_norm)
+    return (p0i, p00i, p00i_norm)
 
 
 def calc_side_dist(pab, p0i, pa_norm, pb_norm, p0a_norm, p0b_norm, p0ia,
@@ -147,7 +151,7 @@ def calc_side_dist(pab, p0i, pa_norm, pb_norm, p0a_norm, p0b_norm, p0ia,
 
   # r: direction of p0i to p0ii
   r = np.cross(np.cross(p0ib, p0ia), pab)
-  r_norm = np.linalg.norm(r, axis=1)
+  r_norm = np.sqrt(inner1d(r, r))
 
   cos_gamma = inner1d(p0ia, r) / (p0ia_norm * r_norm)
 
@@ -155,7 +159,7 @@ def calc_side_dist(pab, p0i, pa_norm, pb_norm, p0a_norm, p0b_norm, p0ia,
   p0i0ii_norm = p0ia_norm * cos_gamma
   p0i0ii = p0i0ii_norm[:, None] * (r / r_norm[:, None])
   p0ii = p0i + p0i0ii
-  p0ii_norm = np.linalg.norm(p0ii, axis=1)
+  p0ii_norm = np.sqrt(inner1d(p0ii, p0ii))
 
   # t < 0, p0 closest to pa. d = p0a_norm
   # t > 1, p0 closest to pb. d = p0b_norm
