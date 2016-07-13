@@ -6,7 +6,7 @@ import logging
 from tqdm import tqdm
 
 from distance_utils.all_pairs_euc_dist import nuc_dist_pairs
-from depth_utils.alpha_shape import alpha_shape
+from depth_utils.alpha_shape import AlphaShape
 from Chromosome import Chromosome
 
 
@@ -189,4 +189,7 @@ if __name__=="__main__":
 
   coords = np.vstack(coords)
 
-  alpha_shape(coords)
+  alpha_shape = AlphaShape(coords)
+  print(alpha_shape)
+
+  print(alpha_shape.get_verts(1.5))

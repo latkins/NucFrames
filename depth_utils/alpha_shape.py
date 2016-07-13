@@ -5,71 +5,85 @@ from collections import defaultdict
 
 from .circumsphere import simplex_circumsphere
 
-def alpha_shape(points):
-  """
-  VALID ONLY IN 3D.
+class AlphaShape(object):
+  def __init__(self, points):
+    self.interval_dict, self.coords = self.alpha_intervals(points)
 
-  1. Calculate Delaunay triangulation of points
-  2. Inspect all simplicies from triangulation, accept those whose 
-  circumsphere is empty with radius smaller than alpha.
-  3. All simplicies
+  def get_facets(self, alpha, k=3):
+    """
+    Given an alpha value, return the vertices that make up the
+    corresponding surface.
+    """
+    valid_simplices = {v for v, (a, b) in self.interval_dict.items() if (a <= alpha and b >= alpha)}
 
-  """
-  # Annoyingly this merges all simplicies. We actually want 2 dimensional
-  # simplices, but get 3 dimentional ones. So, we must convert.
-  tri = Delaunay(points, qhull_options="QJ Pp")
-  coords = tri.points
+    # Consider only k-simplices
+    valid_simplices = filter(lambda x: len(x) == k, valid_simplices)
 
-  kdTree = cKDTree(coords)
+    # Create set of vertices corresponding to the valid k-simplices.
+    # vertices = {frozenset(x)  for y in valid_simplices for x in combinations(y, 2)}
 
-  d = len(tri.simplices[0])
-  ch_lookup = set()
-  for simplex in tri.convex_hull:
-    for k in range(d, 1, -1):
-      for x in combinations(simplex, k):
-        ch_lookup.add(frozenset(x))
+    return(valid_simplices)
 
-  # Values of a and b for each simplex.
-  simplex_a = {}
-  simplex_b = {}
+  def alpha_intervals(self, points):
+    """
+    CURRENTLY VALID ONLY IN 3D.
+    Following Edelsbrunner:1994bg, calculate the a/b values that define the intervals B, I, for each simplex.
+    For each simplex, delta_T:
+      Iff alpha isin B_T, then delta_T is on the surface of the alpha shape.
+      Iff alpha isin I_T, then delta_T is in the interior of the alpha shape.
+    """
+    tri = Delaunay(points, qhull_options="QJ Pp")
+    coords = tri.points
 
-  for simplex in tri.simplices:
-    simp_set = frozenset(simplex)
-    _, sigma = simplex_circumsphere(coords[simplex])
-    simplex_a[simp_set] = sigma
-    simplex_b[simp_set] = sigma
+    kdTree = cKDTree(coords)
 
-  sslu = SuperSimplexLookup(tri.simplices)
-  for simplex in sslu.simplices:
-    centre, r = simplex_circumsphere(coords[np.array(list(simplex))])
-    ball_points = kdTree.query_ball_point(centre, r)
-    if len(ball_points) == 0:
-      simplex_a[simplex] = r
-    else:
-      super_simplices = {s
-                        for s in sslu.lookup[simplex]
-                        if len(s) > len(simplex)}
-      a_vals = set()
-      for super_simplex in super_simplices:
-        a = simplex_a[super_simplex]
-        a_vals.add(a)
-        # b = simplex_b[super_simplex]
-      simplex_a[simplex] = min(a_vals)
+    d = len(tri.simplices[0])
+    ch_lookup = set()
+    for simplex in tri.convex_hull:
+      for k in range(d, 1, -1):
+        for x in combinations(simplex, k):
+          ch_lookup.add(frozenset(x))
 
-    if simplex in ch_lookup:
-      simplex_b[simplex] = np.inf
-    else:
-      super_simplices = {s
-                        for s in sslu.lookup[simplex]
-                         if len(s) == d}
-      b_val = max({simplex_b[s] for s in super_simplices})
-      simplex_b[simplex] = b_val
+    # Values of a and b for each simplex.
+    simplex_ab = {}
 
-  """
-  TODO:
-  Use networkx to construct the surface. Find disconnected surfaces, determine if one is internal.
-  """
-  return(simplex_a, simplex_b, coords)
+    for simplex in tri.simplices:
+      simp_set = frozenset(simplex)
+      _, sigma = simplex_circumsphere(coords[simplex])
+      simplex_ab[simp_set] = (sigma, sigma)
+
+    sslu = SuperSimplexLookup(tri.simplices)
+    for simplex in sslu.simplices:
+      centre, r = simplex_circumsphere(coords[np.array(list(simplex))])
+      ball_points = kdTree.query_ball_point(centre, r)
+
+      if len(ball_points) == 0:
+        simplex_a_value = r
+      else:
+        super_simplices = {s
+                          for s in sslu.lookup[simplex]
+                          if len(s) > len(simplex)}
+        a_vals = set()
+        for super_simplex in super_simplices:
+          (a, _) = simplex_ab[super_simplex]
+          a_vals.add(a)
+        simplex_a_value = min(a_vals)
+
+      if simplex in ch_lookup:
+        simplex_b_value = np.inf
+      else:
+        super_simplices = {s
+                          for s in sslu.lookup[simplex]
+                          if len(s) == d}
+        simplex_b_value = max({simplex_ab[s][1] for s in super_simplices})
+
+      simplex_ab[simplex] = (simplex_a_value, simplex_b_value)
+
+    """
+    TODO:
+    Use networkx to construct the surface. Find disconnected surfaces, determine if one is internal.
+    """
+    return(simplex_ab, coords)
 
 
 class SuperSimplexLookup(object):
