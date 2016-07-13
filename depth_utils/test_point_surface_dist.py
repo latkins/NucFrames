@@ -79,29 +79,34 @@ def test_inner(flat_tri, height):
   # Need to work out how to make this consistent in terms of sign.
   assert(np.allclose(np.abs(dist), np.abs([height])))
 
+
 @given(flat_tri(), st.integers(min_value=-1000, max_value=1000))
 def test_dists(flat_tri, height):
   height = float(height)
   # On a point
   for point in flat_tri:
     dists = point_tri_dists(flat_tri[None,:,:], point[None, :])
+    print("on point", point, dists)
 
   for (a, b) in combinations(range(flat_tri.shape[0]), 2):
     # In an edge
     e = flat_tri[a] - flat_tri[b]
     e_mid = e / 2
     dists = point_tri_dists(flat_tri[None,:,:], e_mid[None, :])
-    print(dists)
+    print(a, b, dists)
 
-  # Above an edge
-  e_mid[-1] += height
-  dists = point_tri_dists(flat_tri[None,:,:], e_mid[None, :])
-  print(dists, height)
+    # Above an edge
+    e_mid[-1] += height
+    dists = point_tri_dists(flat_tri[None,:,:], e_mid[None, :])
+    print(dists, height)
+
+    # Outside an edge
+    # ...
 
   # In the middle
   mid = np.mean(flat_tri, axis=0)
   dists = point_tri_dists(flat_tri[None,:,:], mid[None, :])
-  print(dists)
+  print("mid", dists)
 
   # Above the middle
   mid[-1] += height

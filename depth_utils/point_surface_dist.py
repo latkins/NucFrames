@@ -94,103 +94,6 @@ def point_tri_dists(facets, points):
                                     p0i1[m31], np_[m31], p00i_norm[m31])
     return (distances)
 
-    # # Which are outside the triangle, for their respective side?
-    # n12 = (inner1d(np.cross(p0i1[m12], p0i2[m12]), np_[m12]) < 0)
-    # n23 = (inner1d(np.cross(p0i2[m23], p0i3[m23]), np_[m23]) < 0)
-    # n31 = (inner1d(np.cross(p0i3[m31], p0i1[m31]), np_[m31]) < 0)
-
-    # # Final distance array. Default to closest distance to plane, change those
-    # # that don't fall within the triangle.
-    # dists = p00i_norm.copy()
-
-    # # for m12 & n12 - those outside the triangle, nearest the side p12
-    # r12 = np.cross(np.cross(p0i2, p0i1), p12)
-    # r23 = np.cross(np.cross(p0i3, p0i2), p23)
-    # r31 = np.cross(np.cross(p0i1, p0i3), p31)
-
-    # r12_norm = np.linalg.norm(r12, axis=1)
-    # r23_norm = np.linalg.norm(r23, axis=1)
-    # r31_norm = np.linalg.norm(r31, axis=1)
-
-    # cos_gamma_12 = inner1d(p0i1, r12) / (p0i1_norm * r12_norm)
-    # cos_gamma_23 = inner1d(p0i2, r23) / (p0i2_norm * r23_norm)
-    # cos_gamma_31 = inner1d(p0i3, r31) / (p0i3_norm * r31_norm
-    #                                      )    # Is this sign correct?
-
-    # # edge p12
-    # p0i_p0ii_norm = p0i1_norm * cos_gamma_12
-    # p0i_p0ii = p0i_p0ii_norm[:, None] * (r12 / r12_norm[:, None])
-    # p0ii = p0i + p0i_p0ii
-    # p0ii_norm = np.linalg.norm(p0ii, axis=1)
-
-    # t12 = (p0ii_norm[m12][n12] - p1_norm[m12][n12]) / (
-    #     p2_norm[m12][n12] - p1_norm[m12][n12])
-    # t23 = (p0ii_norm[m23][n23] - p2_norm[m23][n23]) / (
-    #     p3_norm[m23][n23] - p2_norm[m23][n23])
-    # t31 = (p0ii_norm[m31][n31] - p3_norm[m31][n31]) / (
-    #     p1_norm[m31][n31] - p3_norm[m31][n31])
-    # # t < 0, p0 closest to p1. d = p01_norm
-    # # t > 1, p0 closest to p2. d = p02_norm
-    # # 0 <= t <= 1, p0 closest to edge. d = sqrt(p0i_p0ii_norm**2 + p00i_norm**2)
-    # dist_12_out = np.empty_like(t12)
-    # dist_12_out[t12 < 0] = p01_norm[m12][n12][t12 < 0]
-    # dist_12_out[t12 > 1] = p02_norm[m12][n12][t12 > 1]
-    # dist_12_out[(0 <= t12) & (t12 <= 1)] = np.sqrt(np.square(p0i_p0ii_norm[
-    #     m12][n12][(0 <= t12) & (t12 <= 1)]) + np.square(p00i_norm[m12][n12][(
-    #         0 <= t12) & (t12 <= 1)]))
-    # dists[m12][n12] = dist_12_out
-
-    # # edge p23
-    # p0i_p0ii_norm = p0i1_norm * cos_gamma_23
-    # p0i_p0ii = p0i_p0ii_norm[:, None] * (r23 / r23_norm[:, None])
-    # p0ii = p0i + p0i_p0ii
-    # p0ii_norm = np.linalg.norm(p0ii, axis=1)
-
-    # dist_23_out = np.empty_like(t23)
-    # dist_23_out[t23 < 0] = p01_norm[m23][n23][t23 < 0]
-    # dist_23_out[t23 > 1] = p02_norm[m23][n23][t23 > 1]
-    # dist_23_out[(0 <= t23) & (t23 <= 1)] = np.sqrt(np.square(p0i_p0ii_norm[
-    #     m23][n23][(0 <= t23) & (t23 <= 1)]) + np.square(p00i_norm[m23][n23][(
-    #         0 <= t23) & (t23 <= 1)]))
-    # dists[m23][n23] = dist_23_out
-
-    # # edge p31
-    # p0i_p0ii_norm = p0i1_norm * cos_gamma_31
-    # p0i_p0ii = p0i_p0ii_norm[:, None] * (r31 / r31_norm[:, None])
-    # p0ii = p0i + p0i_p0ii
-    # p0ii_norm = np.linalg.norm(p0ii, axis=1)
-
-    # dist_31_out = np.empty_like(t31)
-    # dist_31_out[t31 < 0] = p01_norm[m31][n31][t31 < 0]
-    # dist_31_out[t31 > 1] = p02_norm[m31][n31][t31 > 1]
-    # dist_31_out[(0 <= t31) & (t31 <= 1)] = np.sqrt(np.square(p0i_p0ii_norm[
-    #     m31][n31][(0 <= t31) & (t31 <= 1)]) + np.square(p00i_norm[m31][n31][(
-    #         0 <= t31) & (t31 <= 1)]))
-    # dists[m31][n31] = dist_31_out
-
-    # all_dists.append(dists)
-    # return (np.array(all_dists))
-  """
-  for i in range(points[:100].shape[0]):
-  p0 = points[i]
-  p10 = p10_[i]
-
-  #dists_ = np.einsum('ij,ij->i', v0_point_diff, v0_point_diff)
-
-  dists = inner1d(np_, p10)
-  dists /= np_norm
-
-  print(np.max(np.abs(dists)))
-
-  min_dist_idx = np.argmin(np.abs(dists))
-
-  min_dist = dists[min_dist_idx]
-
-  all_dists.append(min_dist)
-
-  all_dists = np.array(all_dists)
-    """
-
 
 def point_project(p0, p10, p01_norm, np_, np_norm):
   """
@@ -237,8 +140,8 @@ def calc_side_dist(pab, p0i, pa_norm, pb_norm, p0a_norm, p0b_norm, p0ia,
   Points are nearest the specified side, but unknown if they are internal.
   """
   # No points passed, return empty list.
-  if len(p00i_norm) == 0:
-    return(p00i_norm)
+  # if len(p00i_norm) == 0:
+  #   return(p00i_norm)
   # Areas where point is outside of triangle.
   tri_m = inner1d(np.cross(p0ia, p0ib), np_) < 0
 
