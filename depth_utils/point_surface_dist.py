@@ -33,15 +33,6 @@ def point_tri_dists(facets, points):
   np_ = np.cross(p12, p13, axis=1)
 
   np_norm = np.linalg.norm(np_, axis=1)
-  """
-  print(points.shape, p1.shape)
-  p10_ = np.einsum("ab,cb -> acb", points, -1 *  p1)
-  p01_ = np.einsum("ab,cb -> acb", -1 * points, p1)
-  print(p10_.shape, p01_.shape)
-  p10_norm_ = np.linalg.norm(p10_, axis=2)
-  p01_norm_ = np.linalg.norm(p01_, axis=2)
-  print(p10_norm_.shape)
-  """
 
   # Will use the convention that i = ', so pi should be read as p'
   all_dists = []
@@ -80,14 +71,17 @@ def point_tri_dists(facets, points):
     m31 = f3 & ~f1
 
     distances = p00i_norm.copy()
+    print("m12")
     distances[m12] = calc_side_dist(p12[m12], p0i[m12], p1_norm[m12],
                                     p2_norm[m12], p01_norm[m12],
                                     p02_norm[m12], p0i1[m12], p0i1_norm[m12],
                                     p0i2[m12], np_[m12], p00i_norm[m12])
+    print("m23")
     distances[m23] = calc_side_dist(p23[m23], p0i[m23], p2_norm[m23],
                                     p3_norm[m23], p02_norm[m23],
                                     p03_norm[m23], p0i2[m23], p0i2_norm[m23],
                                     p0i3[m23], np_[m23], p00i_norm[m23])
+    print("m31")
     distances[m31] = calc_side_dist(p31[m31], p0i[m31], p3_norm[m31],
                                     p1_norm[m31], p03_norm[m31],
                                     p01_norm[m31], p0i3[m31], p0i3_norm[m31],
@@ -165,12 +159,32 @@ def calc_side_dist(pab, p0i, pa_norm, pb_norm, p0a_norm, p0b_norm, p0ia,
   # t > 1, p0 closest to pb. d = p0b_norm
   # 0 <= t <= 1, p0 closest to edge. d = sqrt(p0i0ii_norm**2 + p00i_norm**2)
   t = (p0ii_norm - pa_norm) / (pb_norm - pa_norm)
+  if len(p0i) > 0:
+    print("""
+    Point plane intersection: {}
+    p0i -> vertex a: {}
+    p0i -> vertex b: {}
+    ||p0i -> vertex a||: {}
+    ||p0i -> vertex b||: {}
+    t: {}
+    np: {}
+    cross: {}
+    cross projection: 
+    {}
+    """.format(p0i, p0ia, p0ib,
+              np.linalg.norm(p0ia, axis=1),
+              np.linalg.norm(p0ib, axis=1),
+              t,
+              np_,
+              np.cross(p0ia, p0ib),
+              inner1d(np.cross(p0ia, p0ib), np_)
+              ))
   t_01 = (0 <= t) & (t <= 1)
 
   dists = p00i_norm.copy()
   dists[tri_m & (t < 0)] = p0a_norm[tri_m & (t < 0)]
   dists[tri_m & (t > 1)] = p0b_norm[tri_m & (t > 1)]
   dists[tri_m & t_01] = np.sqrt(np.square(p0i0ii_norm[tri_m & t_01]) +
-                               np.square(p00i_norm[tri_m & t_01]))
+                                np.square(p00i_norm[tri_m & t_01]))
 
   return (dists)

@@ -57,8 +57,8 @@ def test_inner(flat_tri, height):
   height = float(height)
   # In the middle
   mid = np.mean(flat_tri, axis=0)
-  mid[-1] += height
-  p0 = mid
+  p0 = mid.copy()
+  p0[-1] += height
 
   p1 = flat_tri[0, :][None, :]
   p2 = flat_tri[1, :][None, :]
@@ -75,9 +75,10 @@ def test_inner(flat_tri, height):
   np_ = np.cross(p12, p13, axis=1)
   np_norm = np.linalg.norm(np_, axis=1)
 
-  _, _, dist = point_project(p0, p10, p01_norm, np_, np_norm)
+  p0i, p00i, dist = point_project(p0, p10, p01_norm, np_, np_norm)
   # Need to work out how to make this consistent in terms of sign.
   assert(np.allclose(np.abs(dist), np.abs([height])))
+  assert(np.allclose(p0i, mid, atol=1e-04))
 
 
 @given(flat_tri(), st.integers(min_value=-1000, max_value=1000))
@@ -114,7 +115,34 @@ def test_dists(flat_tri, height):
   dists = point_tri_dists(flat_tri[None,:,:], mid[None, :])
   assert(np.allclose(np.abs(dists), np.abs([height])))
 
+
+def test_specifics():
+  """
+  Specific cases to test bugs I have observed.
+  """
+  points = np.array([[ 12.36671638, 8.51196003, -18.44643211]])
+  facets = np.array([[[-10.70446108, -8.1637458, -30.22221967],
+                    [-13.16988108, -9.30934343, -31.77049862],
+                    [-11.80704539, -9.91827789, -30.34846931]]])
+
+  facets = np.array([[[-10.70446108, -8.1637458, -30.22221967],
+                      [-11.80704539, -9.91827789, -30.34846931],
+                      [-13.16988108, -9.30934343, -31.77049862]]])
+
+
+  points = np.array([[2, 1, 2]], dtype=np.float32)
+  facets = np.array([[[0,0,0],
+                    [2, 0, 0],
+                    [1,2,0]]], dtype=np.float32)
+
+  print(points, facets)
+  dists = point_tri_dists(facets, points)
+  print(dists)
+
+
+
 if __name__=="__main__":
-  with settings(max_examples=100000):
-    test_inner()
-    test_dists()
+  test_specifics()
+  # with settings(max_examples=100000):
+  #   test_inner()
+  #   test_dists()
