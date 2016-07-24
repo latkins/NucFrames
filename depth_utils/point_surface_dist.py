@@ -232,8 +232,8 @@ def reg6(a, b, c, d, e, f):
     nogil=True)
 def point_tri_dist(facet, point):
   """
-  Facet: [p1, p2, p3] float32, (3, 3)
-  point: float32 (x, y, z)
+  Facet: float32, (3, 3)
+  point: float32 (3, )
   """
   B = facet[0, :]
   e0 = facet[1, :] - B

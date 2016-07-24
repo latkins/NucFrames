@@ -6,7 +6,7 @@ import numpy as np
 
 from itertools import combinations
 
-from .point_surface_dist import point_project, point_tri_dists
+from .point_surface_dist import points_tris_dists
 
 @st.composite
 def flat_tri(draw):
@@ -57,28 +57,12 @@ def test_inner(flat_tri, height):
   height = float(height)
   # In the middle
   mid = np.mean(flat_tri, axis=0)
-  p0 = mid.copy()
-  p0[-1] += height
+  point = mid.copy()
+  point[-1] += height
 
-  p1 = flat_tri[0, :][None, :]
-  p2 = flat_tri[1, :][None, :]
-  p3 = flat_tri[2, :][None, :]
+  dist = points_tris_dists(flat_tri[None, :], point[None, :])
 
-  p10 = p0 - p1
-  p01 = p1 - p0
-  p12 =  p2 - p1
-  p13 =  p3 - p1
-
-  p10_norm = np.linalg.norm(p10, axis=1)
-  p01_norm = np.linalg.norm(p01, axis=1)
-
-  np_ = np.cross(p12, p13, axis=1)
-  np_norm = np.linalg.norm(np_, axis=1)
-
-  p0i, p00i, dist = point_project(p0, p10, p01_norm, np_, np_norm)
-  # Need to work out how to make this consistent in terms of sign.
   assert(np.allclose(np.abs(dist), np.abs([height])))
-  assert(np.allclose(p0i, mid, atol=1e-04))
 
 
 @given(flat_tri(), st.integers(min_value=-1000, max_value=1000))
@@ -88,18 +72,18 @@ def test_dists(flat_tri, height):
   # All triangles have z = 1 to stop some errors.
   # On a point
   for point in flat_tri:
-    dists = point_tri_dists(flat_tri[None,:,:], point[None, :])
+    dists = points_tris_dists(flat_tri[None,:,:], point[None, :])
     assert(np.allclose(np.abs(dists), 0))
 
   for (a, b) in combinations(range(flat_tri.shape[0]), 2):
     # In an edge
     e_mid = np.mean(np.array([flat_tri[a], flat_tri[b]]), axis=0)
-    dists = point_tri_dists(flat_tri[None,:,:], e_mid[None, :])
+    dists = points_tris_dists(flat_tri[None,:,:], e_mid[None, :])
     assert(np.allclose(np.abs(dists), 0))
 
     # Above an edge
     e_mid[-1] += height
-    dists = point_tri_dists(flat_tri[None,:,:], e_mid[None, :])
+    dists = points_tris_dists(flat_tri[None,:,:], e_mid[None, :])
     assert(np.allclose(np.abs(dists), np.abs([height])))
 
     # Outside an edge
@@ -107,42 +91,240 @@ def test_dists(flat_tri, height):
 
   # In the middle
   mid = np.mean(flat_tri, axis=0)
-  dists = point_tri_dists(flat_tri[None,:,:], mid[None, :])
+  print(mid)
+  dists = points_tris_dists(flat_tri[None,:,:], mid[None, :])
   assert(np.allclose(np.abs(dists), 0))
 
   # Above the middle
   mid[-1] += height
-  dists = point_tri_dists(flat_tri[None,:,:], mid[None, :])
+  dists = points_tris_dists(flat_tri[None,:,:], mid[None, :])
   assert(np.allclose(np.abs(dists), np.abs([height])))
 
+def test_region0():
+  facets = np.array([[[0, 0, 0],
+                      [2, 0, 0],
+                      [0, 2, 0]]], dtype=np.float32)
 
-def test_specifics():
-  """
-  Specific cases to test bugs I have observed.
-  """
-  points = np.array([[ 12.36671638, 8.51196003, -18.44643211]])
-  facets = np.array([[[-10.70446108, -8.1637458, -30.22221967],
-                    [-13.16988108, -9.30934343, -31.77049862],
-                    [-11.80704539, -9.91827789, -30.34846931]]])
+  # In plane
+  points = np.array([[1, 1, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 0.0
 
-  facets = np.array([[[-10.70446108, -8.1637458, -30.22221967],
-                      [-11.80704539, -9.91827789, -30.34846931],
-                      [-13.16988108, -9.30934343, -31.77049862]]])
+  points = np.array([[0, 0, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 0.0
+
+  points = np.array([[2, 0, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 0.0
+
+  points = np.array([[0, 2, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 0.0
+
+  # Above
+  points = np.array([[1, 1, 2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 2.0
+
+  points = np.array([[0, 0, 2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 2.0
+
+  points = np.array([[2, 0, 2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 2.0
+
+  points = np.array([[0, 2, 2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 2.0
+
+  # Below
+  points = np.array([[1, 1, -2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 2.0
+
+  points = np.array([[0, 0, -2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 2.0
+
+  points = np.array([[2, 0, -2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 2.0
+
+  points = np.array([[0, 2, -2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 2.0
 
 
-  points = np.array([[2, 1, 2]], dtype=np.float32)
-  facets = np.array([[[0,0,0],
-                    [2, 0, 0],
-                    [1,2,0]]], dtype=np.float32)
+def test_region1():
+  facets = np.array([[[0, 0, 0],
+                      [2, 0, 0],
+                      [0, 2, 0]]], dtype=np.float32)
 
-  print(points, facets)
-  dists = point_tri_dists(facets, points)
-  print(dists)
+  # On edge
+  points = np.array([[1, 1, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 0
+
+  # In plane
+  points = np.array([[2, 2, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == np.sqrt(2.0)
+
+  # Above
+  points = np.array([[2, 2, 2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([1,1,0]))
+  assert dists == d
+
+  # Below
+  points = np.array([[2, 2, -2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([1,1,0]))
+  assert dists == d
 
 
+def test_region2():
+  facets = np.array([[[0, 0, 0],
+                      [2, 0, 0],
+                      [0, 2, 0]]], dtype=np.float32)
 
-if __name__=="__main__":
-  test_specifics()
-  # with settings(max_examples=100000):
-  #   test_inner()
-  #   test_dists()
+
+  # On point
+  points = np.array([[0, 2, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 0
+
+  # In plane
+  points = np.array([[-1, 4, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([0,2,0]))
+  assert dists == d
+
+  # Above
+  points = np.array([[-1, 4, 1]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([0,2,0]))
+  assert dists == d
+
+  # Below
+  points = np.array([[-1, 4, -1]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([0,2,0]))
+  assert dists == d
+
+def test_region3():
+  facets = np.array([[[0, 0, 0],
+                      [2, 0, 0],
+                      [0, 2, 0]]], dtype=np.float32)
+
+  # On edge
+  points = np.array([[0, 1, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 0
+
+  # In plane
+  points = np.array([[-1, 1, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 1.0
+
+  # Above
+  points = np.array([[-1, 1, 2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([0,1,0]))
+  assert dists == d
+
+  # Below
+  points = np.array([[-1, 1, -2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([0,1,0]))
+  assert dists == d
+
+
+def test_region4():
+  facets = np.array([[[0, 0, 0],
+                      [2, 0, 0],
+                      [0, 2, 0]]], dtype=np.float32)
+
+
+  # On point
+  points = np.array([[0, 0, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 0
+
+  # In plane
+  points = np.array([[-1, -1, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == np.sqrt(2)
+
+  # Above
+  points = np.array([[-1, -1, 2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([0,0,0]))
+  assert dists == d
+
+  # Below
+  points = np.array([[-1, -1, -2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([0,0,0]))
+  assert dists == d
+
+
+def test_region5():
+  facets = np.array([[[0, 0, 0],
+                      [2, 0, 0],
+                      [0, 2, 0]]], dtype=np.float32)
+
+  # On edge
+  points = np.array([[1, 0, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 0
+
+  # In plane
+  points = np.array([[1, -1, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 1.0
+
+  # Above
+  points = np.array([[1, -1, 2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([1,0,0]))
+  assert dists == d
+
+  # Below
+  points = np.array([[1, -1, -2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([1,0,0]))
+  assert dists == d
+
+
+def test_region6():
+  facets = np.array([[[0, 0, 0],
+                      [2, 0, 0],
+                      [0, 2, 0]]], dtype=np.float32)
+
+
+  # On point
+  points = np.array([[2, 0, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  assert dists == 0
+
+  # In plane
+  points = np.array([[3, -0.5, 0]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([2,0,0]))
+  assert dists == d
+
+  # Above
+  points = np.array([[3, -0.5, 2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([2,0,0]))
+  assert dists == d
+
+  # Below
+  points = np.array([[3, -0.5, -2]], dtype=np.float32)
+  dists = points_tris_dists(facets, points)
+  d = np.linalg.norm(points - np.array([2,0,0]))
+  assert dists == d
+
