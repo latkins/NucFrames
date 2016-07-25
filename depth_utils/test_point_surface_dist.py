@@ -44,13 +44,14 @@ def flat_tri(draw):
 
   return(tri)
 
+
 def check_line(a, b, p):
   t = np.isclose((p[0] - a[0]) / (b[0] - a[0]), (p[1] - a[1]) / (b[1] - a[1]))
   return(t)
 
 
 @given(flat_tri(), st.integers(min_value=-1000, max_value=1000))
-def test_inner(flat_tri, height):
+def inner(flat_tri, height):
   """
   Test the projection is correct if a point is above a triangle.
   """
@@ -66,7 +67,7 @@ def test_inner(flat_tri, height):
 
 
 @given(flat_tri(), st.integers(min_value=-1000, max_value=1000))
-def test_dists(flat_tri, height):
+def dists(flat_tri, height):
   height = float(height)
 
   # All triangles have z = 1 to stop some errors.
@@ -99,6 +100,7 @@ def test_dists(flat_tri, height):
   mid[-1] += height
   dists = points_tris_dists(flat_tri[None,:,:], mid[None, :])
   assert(np.allclose(np.abs(dists), np.abs([height])))
+
 
 def test_region0():
   facets = np.array([[[0, 0, 0],
@@ -213,6 +215,7 @@ def test_region2():
   dists = points_tris_dists(facets, points)
   d = np.linalg.norm(points - np.array([0,2,0]))
   assert dists == d
+
 
 def test_region3():
   facets = np.array([[[0, 0, 0],

@@ -24,6 +24,7 @@ class AlphaShape(object):
 
     return(valid_simplices)
 
+
   def alpha_intervals(self, points):
     """
     CURRENTLY VALID ONLY IN 3D.
