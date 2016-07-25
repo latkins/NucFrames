@@ -1,12 +1,14 @@
 import numpy as np
 import os
 import h5py
-from itertools import combinations_with_replacement
+from itertools import combinations_with_replacement, combinations
 import logging
 from tqdm import tqdm
+import networkx as nx
 
 from distance_utils.all_pairs_euc_dist import nuc_dist_pairs
 from depth_utils.alpha_shape import AlphaShape
+from depth_utils.point_surface_dist import points_tris_dists
 from Chromosome import Chromosome
 
 
@@ -28,7 +30,6 @@ class NucFrame(object):
     .nuc file.
     """
 
-
     try:
       os.remove(nuc_slice_file)
     except OSError:
@@ -45,6 +46,8 @@ class NucFrame(object):
     cls._store_expr_contacts(nuc_file, store, chrms)
     cls._store_dists(nuc_file, store, chrms)
     cls._store_positions(nuc_file, store, chrms)
+    cls._store_alpha_depths(nuc_file, store, chrms)
+    return(cls(nuc_slice_file))
 
   @staticmethod
   def _extract_chrms(nuc_file):
@@ -142,6 +145,58 @@ class NucFrame(object):
       logging.info("Created positions for chrm {} in {}".format(chrm, store[
           "name"]))
 
+  @staticmethod
+  def _store_alpha_depths(nuc_file, store, chrms, alpha=1.6, perc=0.005):
+    """Store the absolute distance of each particle from each surface.
+    It is likely that there will be multiple disconnected surfaces found. The
+    outer surface will be valid, as will an inner surface if present.
+
+    Use a value of alpha to define the surface, and a percentage to decide how
+    big stored subgraphs should be.
+    """
+    all_positions = []
+
+    nuc = h5py.File(nuc_file, 'r')
+    chrm_parts = nuc["structures"]["0"]["coords"]
+
+    for chrm in chrms:
+      positions = chrm_parts[chrm][:]
+      all_positions.append(positions[0, :, :])
+
+    all_positions = np.vstack(all_positions)
+    alpha_shape = AlphaShape(all_positions)
+
+    facets = list(alpha_shape.get_facets(alpha))
+
+    # Construct the graph
+    edges = {frozenset(x) for y in facets for x in combinations(y, 2)}
+    nodes = {x for y in edges for x in y}
+    g = nx.Graph()
+    g.add_nodes_from(nodes)
+    g.add_edges_from(edges)
+
+    # Iterate over subgraphs, ordered by size.
+    for i, sg in enumerate(sorted(
+        nx.connected_component_subgraphs(g),
+        key=lambda x: len(x),
+        reverse=True)):
+
+      valid_nodes = set(sg.nodes())
+      base_surface_dists_path = os.path.join("depth", str(i))
+      if len(valid_nodes) / all_positions.shape[0] >= perc:
+        store.create_dataset(os.path.join(base_surface_dists_path, "alpha"), data=alpha)
+        # Filter facets
+        valid_facets = np.array(
+            [alpha_shape.coords[list(x)] for x in facets if x <= valid_nodes],
+            dtype=np.float32)
+        for chrm in chrms:
+
+          positions = chrm_parts[chrm][0,:,:].astype(np.float32)
+          surface_dists = points_tris_dists(valid_facets, positions)
+          store.create_dataset(os.path.join(base_surface_dists_path, chrm), data=surface_dists)
+          logging.info("Inserted distances from chrm {} particles to surface {}".format(chrm, i))
+
+
   def __init__(self, nuc_slice_file, chrm_limit_dict=None):
     """HDF5 hierarchy:
     name :: String -- the name of the NucFrame
@@ -151,6 +206,8 @@ class NucFrame(object):
     position/chrm :: [[[Float]]] -- (model, bead_idx, xyz)
     expr_contacts/chrm/chrm :: [[Int]] -- (bead_idx, bead_idx), raw contact count.
     dists/chrm/chrm :: [[Float]] -- (bead_idx, bead_idx), distanes between beads.
+    depths/i/alpha :: Float -- alpha value used to calculate depths.
+    depths/i/chrm/ :: [Float] -- (bead_idx, ), depth of point from surface i.
     """
     self.store = h5py.File(nuc_slice_file, 'r', libvar="latest")
     chromosomes = [x.decode("utf-8") for x in self.store["chrms"]]
@@ -168,28 +225,19 @@ class Chromosomes(object):
 
   def __getitem__(self, chrm):
     lower, upper = self.chrm_limit_dict[chrm]
-    return(Chromosome(self.store, chrm, lower, upper))
+    return (Chromosome(self.store, chrm, lower, upper))
 
   def __iter__(self):
     for chrm in self.chrms:
       lower, upper = self.chrm_limit_dict[chrm]
-      yield(Chromosome(self.store, chrm, lower, upper))
+      yield (Chromosome(self.store, chrm, lower, upper))
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
   import glob
 
-  nuc_file = "/home/lpa24/dev/cam/data/edl_chromo/mm10/single_cell_nuc_100k/Q5_ambig_10x_100kb.nuc"
-  slice_file = "/mnt/SSD/LayeredNuc/Q5_ambig_100kb.hdf5"
-  # nf = NucFrame.from_nuc(nuc_file, slice_file)
-  nf = NucFrame(slice_file)
-
-  coords = []
-  for c in nf.chrms:
-    coords.append(c.positions[0, :, :])
-
-  coords = np.vstack(coords)
-
-  alpha_shape = AlphaShape(coords)
-  print(alpha_shape)
-
-  print(alpha_shape.get_verts(1.5))
+  slice_path = "/mnt/SSD/LayeredNuc/"
+  for nuc_file in glob.glob("/home/lpa24/dev/cam/data/edl_chromo/mm10/single_cell_nuc_100k/ambig/*"):
+    slice_file = os.path.join(slice_path, os.path.splitext(os.path.basename(nuc_file))[0] + ".hdf5")
+    nf = NucFrame.from_nuc(nuc_file, slice_file)
+    #nf = NucFrame(slice_file)
