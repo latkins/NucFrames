@@ -5,6 +5,7 @@ from itertools import combinations_with_replacement, combinations
 import logging
 from tqdm import tqdm
 import networkx as nx
+import math
 
 from distance_utils.all_pairs_euc_dist import nuc_dist_pairs
 from depth_utils.alpha_shape import AlphaShape
@@ -64,6 +65,8 @@ class NucFrame(object):
       chrm_sizes = np.diff(positions)
       sizes = sizes.union(set(chrm_sizes))
 
+    # TODO: I need some messed up files to work.
+    sizes = {math.floor(x  / 1000) * 1000 for x in sizes}
     if len(sizes) != 1:
       raise ValueError("Inconsistent bin sizes: {}".format(len(sizes)))
     else:
@@ -86,6 +89,8 @@ class NucFrame(object):
     chrm_parts = nuc["structures"]["0"]["particles"]
     for chrm in chrms:
       positions = chrm_parts[chrm]["positions"][:]
+
+      positions = [math.floor(x  / 1000) * 1000 for x in positions]
 
       if np.all(np.sort(positions) != positions):
         raise ValueError("Positions not in sorted order.")
@@ -182,19 +187,27 @@ class NucFrame(object):
         reverse=True)):
 
       valid_nodes = set(sg.nodes())
-      base_surface_dists_path = os.path.join("depth", str(i))
+      # Filter facets
+      valid_facets = np.array(
+          [alpha_shape.coords[list(x)] for x in facets if x <= valid_nodes],
+          dtype=np.float32)
+
+      base_surface_dists_path = os.path.join("depths", str(i))
+
+      # Store distances for points in each chromosome vs subgraph surface.
       if len(valid_nodes) / all_positions.shape[0] >= perc:
         store.create_dataset(os.path.join(base_surface_dists_path, "alpha"), data=alpha)
-        # Filter facets
-        valid_facets = np.array(
-            [alpha_shape.coords[list(x)] for x in facets if x <= valid_nodes],
-            dtype=np.float32)
         for chrm in chrms:
-
           positions = chrm_parts[chrm][0,:,:].astype(np.float32)
-          surface_dists = points_tris_dists(valid_facets, positions)
+          surface_dists = np.min(points_tris_dists(valid_facets, positions), axis=1)
           store.create_dataset(os.path.join(base_surface_dists_path, chrm), data=surface_dists)
           logging.info("Inserted distances from chrm {} particles to surface {}".format(chrm, i))
+
+      # Store surfaces, even those we didn't measure distance for.
+      surf_path = os.path.join("surface", str(i))
+      facet_indices = np.array([list(x) for x in facets if x <= valid_nodes])
+      store.create_dataset(surf_path, data=facet_indices)
+      logging.info("Inserted surface verticies for {}".format(i))
 
 
   def __init__(self, nuc_slice_file, chrm_limit_dict=None):
@@ -208,6 +221,8 @@ class NucFrame(object):
     dists/chrm/chrm :: [[Float]] -- (bead_idx, bead_idx), distanes between beads.
     depths/i/alpha :: Float -- alpha value used to calculate depths.
     depths/i/chrm/ :: [Float] -- (bead_idx, ), depth of point from surface i.
+    surface/i :: [[Int]] -- vertices of triangles that form surface i.
+                            index is relative to positions vstacked by chromosome.
     """
     self.store = h5py.File(nuc_slice_file, 'r', libvar="latest")
     chromosomes = [x.decode("utf-8") for x in self.store["chrms"]]
@@ -215,7 +230,6 @@ class NucFrame(object):
       chrm_limit_dict = {chrm: (None, None) for chrm in chromosomes}
 
     self.chrms = Chromosomes(self.store, chromosomes, chrm_limit_dict)
-
 
 class Chromosomes(object):
   def __init__(self, store, chromosomes, chrm_limit_dict):
@@ -236,8 +250,44 @@ class Chromosomes(object):
 if __name__ == "__main__":
   import glob
 
-  slice_path = "/mnt/SSD/LayeredNuc/"
-  for nuc_file in glob.glob("/home/lpa24/dev/cam/data/edl_chromo/mm10/single_cell_nuc_100k/ambig/*"):
-    slice_file = os.path.join(slice_path, os.path.splitext(os.path.basename(nuc_file))[0] + ".hdf5")
-    nf = NucFrame.from_nuc(nuc_file, slice_file)
+  logging.basicConfig(level=logging.INFO)
+  slice_path = "/mnt/SSD/LayeredNuc/frames/"
+  # for nuc_file in glob.glob("/home/lpa24/dev/cam/data/edl_chromo/mm10/single_cell_nuc_100k/ambig/*"):
+  #   print(nuc_file)
+  #   slice_file = os.path.join(slice_path, os.path.splitext(os.path.basename(nuc_file))[0] + ".hdf5")
+  #   nf = NucFrame.from_nuc(nuc_file, slice_file)
     #nf = NucFrame(slice_file)
+
+  old_file_path = "/home/lpa24/dev/cam/data/edl_chromo/mm10/old_single_cell_nuc_100k/"
+  old_files = ["S1028_GTGAAA_06_10x_100kb_mm10.nuc",
+                "S1112_NXT-46_06_10x_100kb_mm10.nuc",
+                "S1112_NXT-55_18_10x_100kb_mm10.nuc",
+                "S1112_NXT-65_11_10x_100kb_mm10.nuc",
+                "S1227_NXT-34_02_10x_100kb_mm10.nuc",
+                "S1028_TGACCA_07_10x_100kb_mm10.nuc",
+                "S1112_NXT-48_08_10x_100kb_mm10.nuc",
+                "S1112_NXT-57_20_10x_100kb_mm10.nuc",
+                "S1112_NXT-67_13_10x_100kb_mm10.nuc",
+                "S1227_NXT-36_04_10x_100kb_mm10.nuc",
+                "S1028_ACAGTG_01_10x_100kb_mm10.nuc",
+                "S1112_NXT-44_04_10x_100kb_mm10.nuc",
+                "S1112_NXT-52_15_10x_100kb_mm10.nuc",
+                "S1112_NXT-58_21_10x_100kb_mm10.nuc",
+                "S1112_NXT-68_14_10x_100kb_mm10.nuc",
+                "S1227_NXT-41_06_10x_100kb_mm10.nuc",
+                "S1028_CCGTCC_03_10x_100kb_mm10.nuc",
+                "S1112_NXT-45_05_10x_100kb_mm10.nuc",
+                "S1112_NXT-53_16_10x_100kb_mm10.nuc",
+                "S1112_NXT-63_09_10x_100kb_mm10.nuc",
+                "S1225_NXT-32_01_10x_100kb_mm10.nuc"]
+
+  old_paths = [os.path.join(old_file_path, x) for x in old_files]
+  for nuc_file in old_paths:
+    print(nuc_file)
+    try:
+      slice_file = os.path.join(slice_path, os.path.splitext(os.path.basename(nuc_file))[0] + ".hdf5")
+      nf = NucFrame.from_nuc(nuc_file, slice_file)
+    except ValueError as e:
+      print(e)
+
+

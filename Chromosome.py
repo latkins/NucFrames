@@ -10,6 +10,8 @@ class Chromosome(object):
     """
     Follows the HDF5 layout of NucFrame
     Contains cis-distances, coordinates, depths.
+    Each property obeys the chromosome limits it has been passed, meaning
+    indexes are directly comparable.
     """
     self.store = store
     self.chrm = chrm
@@ -29,6 +31,10 @@ class Chromosome(object):
       return(~np.isnan(all_positions))
 
   @property
+  def cell(self):
+    return(self.store["name"][()])
+
+  @property
   def bp_pos(self):
     return(self.store["bp_pos"][self.chrm][:][self.valid])
 
@@ -44,3 +50,10 @@ class Chromosome(object):
   @property
   def positions(self):
     return(self.store["position"][self.chrm][:][:, self.valid, :])
+
+  @property
+  def depths(self, i=0):
+    """
+    i : the surface from which distances were calcualted. 0 is surface.
+    """
+    return(self.store["depths"][str(i)][self.chrm][:][self.valid])

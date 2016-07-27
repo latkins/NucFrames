@@ -80,10 +80,6 @@ class AlphaShape(object):
 
       simplex_ab[simplex] = (simplex_a_value, simplex_b_value)
 
-    """
-    TODO:
-    Use networkx to construct the surface. Find disconnected surfaces, determine if one is internal.
-    """
     return(simplex_ab, coords)
 
 
