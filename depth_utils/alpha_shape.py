@@ -1,9 +1,29 @@
 from scipy.spatial import Delaunay, cKDTree
 import numpy as np
-from itertools import combinations
+from itertools import combinations, permutations
 from collections import defaultdict
 
+from functools import lru_cache
+
 from .circumsphere import simplex_circumsphere
+
+@lru_cache(maxsize=128)
+def _mk_idxs(input_list_len, size):
+  return([list(x) for x in combinations(range(input_list_len), size)])
+
+def circular_subgroup(input_list, size):
+  """
+  list: (n, )
+  size: int
+  Return circular subgroups of list, of size.
+
+  Example: list = [ a, b, c, d ], size = 3
+  returns ([ (a, b, c), (b, c, d), (c, d, a), (d, a, b) ])
+  """
+  input_list = np.asarray(input_list)
+  idxs = _mk_idxs(len(input_list), size)
+
+  return [ tuple(input_list[list(idx)]) for idx in idxs ]
 
 class AlphaShape(object):
   def __init__(self, points):
@@ -18,9 +38,6 @@ class AlphaShape(object):
 
     # Consider only k-simplices
     valid_simplices = filter(lambda x: len(x) == k, valid_simplices)
-
-    # Create set of vertices corresponding to the valid k-simplices.
-    # vertices = {frozenset(x)  for y in valid_simplices for x in combinations(y, 2)}
 
     return(valid_simplices)
 
@@ -42,14 +59,14 @@ class AlphaShape(object):
     ch_lookup = set()
     for simplex in tri.convex_hull:
       for k in range(d, 1, -1):
-        for x in combinations(simplex, k):
-          ch_lookup.add(frozenset(x))
+        for x in circular_subgroup(simplex, k):
+          ch_lookup.add(x)
 
     # Values of a and b for each simplex.
     simplex_ab = {}
 
     for simplex in tri.simplices:
-      simp_set = frozenset(simplex)
+      simp_set = tuple(simplex)
       _, sigma = simplex_circumsphere(coords[simplex])
       simplex_ab[simp_set] = (sigma, sigma)
 
@@ -107,13 +124,12 @@ class SuperSimplexLookup(object):
     simplices = set()
     d = len(d_simplices[0])
     for simplex in d_simplices:
-      simplex_key = frozenset(simplex)
+      simplex_key = tuple(simplex)
       for k in range(d, 1, -1):
-        for x in combinations(simplex, k):
-          frozen_subsimplex = frozenset(x)
+        for subsimplex in circular_subgroup(simplex, k):
           # Add lookup simplex -> supersimplex.
-          lookup[frozen_subsimplex].add(simplex_key)
+          lookup[subsimplex].add(simplex_key)
           # Add subsimplex to list of simplices.
-          simplices.add(frozen_subsimplex)
+          simplices.add(subsimplex)
 
     return (simplices, lookup)
