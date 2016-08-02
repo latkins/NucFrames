@@ -30,6 +30,30 @@ class Chromosome(object):
     else:
       return(~np.isnan(all_positions))
 
+  def depths(self, alpha=None, i=0, tag=None):
+    i = str(i)
+
+    if alpha is None and tag is None:
+      raise TypeError("Neither alpha nor tag passed to function")
+
+    dset = self.store["surface_dist"]
+
+    if tag:
+      for k in dset.keys():
+        try:
+          t = dset[k]["tag"][()]
+        except KeyError:
+          pass
+        else:
+          if t == tag:
+            return(dset[k][i][self.chrm][self.valid])
+
+      raise ValueError("No entry found for tag: {}".format(tag))
+
+    elif alpha:
+      return(dset[str(alpha)][self.chrm][str(i)][:][self.valid])
+
+
   @property
   def cell(self):
     return(self.store["name"][()])
@@ -50,10 +74,3 @@ class Chromosome(object):
   @property
   def positions(self):
     return(self.store["position"][self.chrm][:][:, self.valid, :])
-
-  @property
-  def depths(self, i=0):
-    """
-    i : the surface from which distances were calcualted. 0 is surface.
-    """
-    return(self.store["depths"][str(i)][self.chrm][:][self.valid])

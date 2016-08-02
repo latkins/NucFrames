@@ -41,7 +41,7 @@ class NucFrames(object):
       chrms = chrms.intersection(nf_chrms)
     return(chrms)
 
-  def load_nuc_frame(self, key):
+  def _load_nuc_frame(self, key):
     nuc_frm_path = self.nuc_frm_path_list[key]
     return(NucFrame(nuc_frm_path, self.chrm_limit_dict))
 
@@ -55,8 +55,7 @@ class NucFrames(object):
     track_dict = {}
 
     for chrm in set(self.common_chrms) & set(track.keys()):
-      chrm_start, chrm_end = self.chrm_limit_dict[chrm]
-      chrm_bps = np.arange(chrm_start, chrm_end, self.bin_size, dtype=np.int32)
+      chrm_bps = self.chrm_bps(chrm)
       regions = track[chrm]["regions"]
 
       vals = np.zeros_like(chrm_bps)
@@ -71,6 +70,16 @@ class NucFrames(object):
       track_dict[chrm] = vals
     self.tracks[track_name] = track_dict
 
+  def chrm_bps(self, chrm):
+    chrm_start, chrm_end = self.chrm_limit_dict[chrm]
+    chrm_bps = np.arange(chrm_start, chrm_end, self.bin_size, dtype=np.int32)
+    return(chrm_bps)
+
+  def chrm_bp_to_idx(self, chrm, bps):
+    chrm_bps = self.chrm_bps(chrm)
+    idxs, valid = bp_to_idx(bps, chrm_bps, bin_size=self.bin_size)
+    return (idxs, chrm_bps, valid)
+
   def valid_idxs(self, all_positions, lower, upper):
     # This is copied from Chromosome. Could be more elegant. Avoid reuse.
     if lower and upper:
@@ -83,8 +92,6 @@ class NucFrames(object):
       return(~np.isnan(all_positions))
 
 
-
-
   def __getitem__(self, key):
     if isinstance(key, slice):
       return ([self[ii] for ii in range(*key.indices(len(self)))])
@@ -93,7 +100,7 @@ class NucFrames(object):
         key += len(self)
       if key < 0 or key >= len(self):
         raise IndexError("The index {} is out of range.".format(key))
-      return(self.load_nuc_frame(key))
+      return(self._load_nuc_frame(key))
     else:
       raise TypeError("Invalid argument type, {}".format(type(key)))
 
@@ -101,6 +108,6 @@ class NucFrames(object):
     return(len(self.nuc_frm_path_list))
   def __iter__(self):
     for i, nf in enumerate(self.nuc_frm_path_list):
-      yield(self.load_nuc_frame(i))
+      yield(self._load_nuc_frame(i))
 
 # Cis and trans classes?

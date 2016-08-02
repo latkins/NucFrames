@@ -284,7 +284,28 @@ class NucFrame(object):
     return(surfaces)
 
 
-  def surface_dists(self, alpha=1.6, to_calc=None):
+  def store_surface_dists_tag(self, alpha, tag):
+    """
+    Since there are so many surfaces, sometimes we want
+    to add a tag. E.g. EXTERNAL for distances to exterior.
+    This is because different cells might have different alpha values
+    for the external surface.
+    """
+    path = "surface_dist"
+
+    # Check tag isn't already present
+    for alpha in self.store[path].keys():
+      try:
+        t = self.store[path][alpha]["tag"][()]
+      except KeyError:
+        pass
+      else:
+        assert t != tag
+
+    path = os.path.join("surface_dist", str(alpha), "tag")
+    self.store.create_dataset(path, data=tag)
+
+  def store_surface_dists(self, alpha=1.6):
     """Store the absolute distance of each particle from each surface.
     It is likely that there will be multiple disconnected surfaces found. The
     outer surface will be valid, as will an inner surface if present.
@@ -292,21 +313,25 @@ class NucFrame(object):
     Use a value of alpha to define the surface, and a percentage to decide how
     big stored subgraphs should be.
     """
-
-    if to_calc is None:
-      to_calc = [0]
-
-    all_pos = self.all_pos
-
     surfaces = self.alpha_surface(alpha)
 
-    all_dists = []
-    for i, facets in enumerate(surfaces):
-      if i in to_calc:
-        surface_dists = np.min(points_tris_dists(valid_facets, all_pos), axis=1)
-        all_dists.append(surface_dists)
+    try:
+      del self.store["surface_dist"][str(alpha)]
+    except KeyError:
+      pass
 
-    return(all_dists)
+    for i, facets in enumerate(surfaces):
+      facets = facets.astype(np.float32)
+      surface_size = facets.shape[0]
+
+      # Store information about surface.
+      path = os.path.join("surface_dist", str(alpha), str(i))
+      self.store.create_dataset(os.path.join(path, "surface_size"), data=surface_size)
+
+      for chrm in self.chrms:
+        chrm_pos = chrm.positions[0,:,:].astype(np.float32)
+        surface_dists = np.min(points_tris_dists(facets, chrm_pos), axis=1)
+        self.store.create_dataset(os.path.join(path, chrm.chrm), data=surface_dists)
 
 
   def __init__(self, nuc_slice_file, chrm_limit_dict=None, mode="r"):
@@ -323,8 +348,8 @@ class NucFrame(object):
     alpha_shape/k/simplices :: [[Int]] -- (n_simplicies, k), indices of k-simplices.
     alpha_shape/k/ab :: [(a, b)] -- (n_simplicies, 2), a and b values for k-simplices.
                         ^ -- NOTE: length of the two alpha_shape entries align.
-    surface/i :: [[Int]] -- vertices of triangles that form surface i.
-                            index is relative to positions vstacked by chromosome.
+    surface_dist/alpha_val/tag :: optional tag for this value of alpha.
+    surface_dist/alpha_val/i/surface_size :: size of surface i for alpha
     """
     self.store = h5py.File(nuc_slice_file, mode, libvar="latest")
     self.nuc_slice_file = nuc_slice_file
@@ -368,11 +393,55 @@ def all_in(tup, s):
   return True
 
 
+def all_exterior_depths():
+  """
+  Calculate surfaces for these files, with alpha values manually chose to represent
+  the external surface.
+  """
+  slice_path = "/mnt/SSD/LayeredNuc/frames/"
+  nf_alpha_pairs = [("P2E8_ambig_10x_100kb.hdf5", 3.4),
+                    ("P36D6_ambig_10x_100kb.hdf5", 4.0),
+                    # ("1028_GTGAAA_06.hdf5", 4.0),
+                    ("S1112_NXT-48_08.hdf5", 3.2),
+                    ("S1112_NXT-58_21.hdf5", 3.5),
+                    ("S1225_NXT-32_01.hdf5", 4.4),
+                    ("P2I5_ambig_10x_100kb.hdf5", 3.3),
+                    ("Q5_ambig_10x_100kb.hdf5", 3.1),
+                    ("S1028_TGACCA_07.hdf5", 2.9),
+                    ("S1112_NXT-52_15.hdf5", 3.7),
+                    ("S1112_NXT-63_09.hdf5", 4.4),
+                    ("S1227_NXT-34_02.hdf5", 3.5),
+                    ("P2J8_ambig_10x_100kb.hdf5", 4.0),
+                    ("Q6_ambig_10x_100kb.hdf5", 2.6),
+                    ("S1112_NXT-44_04.hdf5", 2.7),
+                    ("S1112_NXT-53_16.hdf5", 3.2),
+                    ("S1112_NXT-65_11.hdf5", 2.9),
+                    ("S1227_NXT-36_04.hdf5", 3.7),
+                    ("P30E4_ambig_10x_100kb.hdf5", 2.6),
+                    ("S1028_ACAGTG_01.hdf5", 2.7),
+                    ("S1112_NXT-45_05.hdf5", 3.0),
+                    ("S1112_NXT-55_18.hdf5", 4.5),
+                    ("S1112_NXT-67_13.hdf5", 2.7),
+                    ("S1227_NXT-41_06.hdf5", 3.2),
+                    ("P30E8_ambig_10x_100kb.hdf5", 4.2),
+                    ("S1028_CCGTCC_03.hdf5", 2.6),
+                    ("S1112_NXT-46_06.hdf5", 2.6),
+                    ("S1112_NXT-57_20.hdf5", 3.5),
+                    ("S1112_NXT-68_14.hdf5", 2.6),
+                    ("UpL13_ambig_10x_100kb.hdf5", 3.2)]
+  for nf_name, alpha in nf_alpha_pairs:
+    print(nf_name)
+    path = os.path.join(slice_path, nf_name)
+    nf = NucFrame(path, mode='a')
+    nf.store_surface_dists(alpha)
+    nf.store_surface_dists_tag(alpha, "EXTERNAL")
+
 if __name__ == "__main__":
   import glob
 
+  all_exterior_depths()
   logging.basicConfig(level=logging.INFO)
-  slice_path = "/mnt/SSD/LayeredNuc/frames/"
+  # slice_path = "/mnt/SSD/LayeredNuc/frames/"
   # nf = NucFrame(os.path.join(slice_path, "Q5_ambig_10x_100kb.hdf5"))
   # nf.alpha_surface()
   # for nuc_file in glob.glob("/home/lpa24/dev/cam/data/edl_chromo/mm10/single_cell_nuc_100k/ambig/*"):
@@ -380,38 +449,38 @@ if __name__ == "__main__":
   #   nf = NucFrame.from_nuc(nuc_file, slice_file)
     # nf = NucFrame(slice_file)
 
-  old_file_path = "/home/lpa24/dev/cam/data/edl_chromo/mm10/old_single_cell_nuc_100k/"
-  old_files = ["S1028_GTGAAA_06_10x_100kb_mm10.nuc",
-                "S1112_NXT-46_06_10x_100kb_mm10.nuc",
-                "S1112_NXT-55_18_10x_100kb_mm10.nuc",
-                "S1112_NXT-65_11_10x_100kb_mm10.nuc",
-                "S1227_NXT-34_02_10x_100kb_mm10.nuc",
-                "S1028_TGACCA_07_10x_100kb_mm10.nuc",
-                "S1112_NXT-48_08_10x_100kb_mm10.nuc",
-                "S1112_NXT-57_20_10x_100kb_mm10.nuc",
-                "S1112_NXT-67_13_10x_100kb_mm10.nuc",
-                "S1227_NXT-36_04_10x_100kb_mm10.nuc",
-                "S1028_ACAGTG_01_10x_100kb_mm10.nuc",
-                "S1112_NXT-44_04_10x_100kb_mm10.nuc",
-                "S1112_NXT-52_15_10x_100kb_mm10.nuc",
-                "S1112_NXT-58_21_10x_100kb_mm10.nuc",
-                "S1112_NXT-68_14_10x_100kb_mm10.nuc",
-                "S1227_NXT-41_06_10x_100kb_mm10.nuc",
-                "S1028_CCGTCC_03_10x_100kb_mm10.nuc",
-                "S1112_NXT-45_05_10x_100kb_mm10.nuc",
-                "S1112_NXT-53_16_10x_100kb_mm10.nuc",
-                "S1112_NXT-63_09_10x_100kb_mm10.nuc",
-                "S1225_NXT-32_01_10x_100kb_mm10.nuc"]
+  # old_file_path = "/home/lpa24/dev/cam/data/edl_chromo/mm10/old_single_cell_nuc_100k/"
+  # old_files = ["S1028_GTGAAA_06_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-46_06_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-55_18_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-65_11_10x_100kb_mm10.nuc",
+  #               "S1227_NXT-34_02_10x_100kb_mm10.nuc",
+  #               "S1028_TGACCA_07_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-48_08_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-57_20_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-67_13_10x_100kb_mm10.nuc",
+  #               "S1227_NXT-36_04_10x_100kb_mm10.nuc",
+  #               "S1028_ACAGTG_01_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-44_04_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-52_15_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-58_21_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-68_14_10x_100kb_mm10.nuc",
+  #               "S1227_NXT-41_06_10x_100kb_mm10.nuc",
+  #               "S1028_CCGTCC_03_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-45_05_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-53_16_10x_100kb_mm10.nuc",
+  #               "S1112_NXT-63_09_10x_100kb_mm10.nuc",
+  #               "S1225_NXT-32_01_10x_100kb_mm10.nuc"]
 
-  old_paths = [os.path.join(old_file_path, x) for x in old_files]
-  for nuc_file in old_paths:
-    print(nuc_file)
-    try:
-      base_name = os.path.splitext(os.path.basename(nuc_file))[0]
-      name = "_".join(base_name.split("_")[:-3])
-      slice_file = os.path.join(slice_path,  "{}.hdf5".format(name))
-      nf = NucFrame.from_nuc(nuc_file, slice_file)
-    except ValueError as e:
-      print(e)
+  # old_paths = [os.path.join(old_file_path, x) for x in old_files]
+  # for nuc_file in old_paths:
+  #   print(nuc_file)
+  #   try:
+  #     base_name = os.path.splitext(os.path.basename(nuc_file))[0]
+  #     name = "_".join(base_name.split("_")[:-3])
+  #     slice_file = os.path.join(slice_path,  "{}.hdf5".format(name))
+  #     nf = NucFrame.from_nuc(nuc_file, slice_file)
+  #   except ValueError as e:
+  #     print(e)
 
 
