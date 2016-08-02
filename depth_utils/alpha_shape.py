@@ -9,7 +9,7 @@ from .circumsphere import simplex_circumsphere
 
 @lru_cache(maxsize=128)
 def _mk_idxs(input_list_len, size):
-  return([list(x) for x in combinations(range(input_list_len), size)])
+  return([sorted(list(x)) for x in combinations(range(input_list_len), size)])
 
 def circular_subgroup(input_list, size):
   """
@@ -18,7 +18,7 @@ def circular_subgroup(input_list, size):
   Return circular subgroups of list, of size.
 
   Example: list = [ a, b, c, d ], size = 3
-  returns ([ (a, b, c), (b, c, d), (c, d, a), (d, a, b) ])
+  returns ([ (a, b, c), (b, c, d), (a, c, d), (a, b, d) ])
   """
   input_list = np.asarray(input_list)
   idxs = _mk_idxs(len(input_list), size)
@@ -26,8 +26,15 @@ def circular_subgroup(input_list, size):
   return [ tuple(input_list[list(idx)]) for idx in idxs ]
 
 class AlphaShape(object):
-  def __init__(self, points):
-    self.interval_dict, self.coords = self.alpha_intervals(points)
+
+  @classmethod
+  def from_points(cls, points):
+    interval_dict, coords = cls.alpha_intervals(cls, points)
+    return(cls(interval_dict, points))
+
+  def __init__(self, interval_dict, coords):
+    self.interval_dict = interval_dict
+    self.coords = coords
 
   def get_facets(self, alpha, k=3):
     """

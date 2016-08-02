@@ -6,11 +6,17 @@ import logging
 from tqdm import tqdm
 import networkx as nx
 import math
+from collections import defaultdict, deque, Counter
 
 from distance_utils.all_pairs_euc_dist import nuc_dist_pairs
-from depth_utils.alpha_shape import AlphaShape
+from depth_utils.alpha_shape import AlphaShape, circular_subgroup
 from depth_utils.point_surface_dist import points_tris_dists
 from Chromosome import Chromosome
+
+def surf_norm(tri):
+  a = tri[1] - tri[0]
+  b = tri[2] - tri[0]
+  return(np.cross(a, b))
 
 
 class NucFrame(object):
@@ -47,7 +53,7 @@ class NucFrame(object):
     cls._store_expr_contacts(nuc_file, store, chrms)
     cls._store_dists(nuc_file, store, chrms)
     cls._store_positions(nuc_file, store, chrms)
-    cls._store_alpha_depths(nuc_file, store, chrms)
+    cls._store_alpha_shape(store, chrms)
     return(cls(nuc_slice_file))
 
   @staticmethod
@@ -151,7 +157,134 @@ class NucFrame(object):
           "name"]))
 
   @staticmethod
-  def _store_alpha_depths(nuc_file, store, chrms, alpha=1.6, perc=0.005):
+  def _store_alpha_shape(store, chrms):
+    "Calculates and stores an AlphaShape."
+
+    all_positions = []
+    for chrm in chrms:
+      all_positions.append(store["position"][chrm][0,:,:])
+
+    all_positions = np.vstack(all_positions)
+
+    # Store alpha_shape.interval_dict
+    alpha_shape = AlphaShape.from_points(all_positions)
+    try:
+      del(store["alpha_shape"])
+    except KeyError as e:
+      pass
+
+    for k in { len(x) for x in alpha_shape.interval_dict.keys() }:
+      simplices = []
+      ab_values = []
+      for simplex, (a, b) in alpha_shape.interval_dict.items():
+        if len(simplex) == k:
+          simplices.append(simplex)
+          ab_values.append([a,b])
+
+      path = os.path.join("alpha_shape", str(k))
+      store.create_dataset(os.path.join(path, "simplices"), data=simplices)
+      store.create_dataset(os.path.join(path, "ab"), data=ab_values)
+    logging.info("Created AlphaShape dataset")
+
+  def _load_alpha_shape(self):
+    all_positions = self.all_pos
+    interval_dict = {}
+    for k in self.store["alpha_shape"].keys():
+      simplices = self.store["alpha_shape"][k]["simplices"][:]
+      ab_values = self.store["alpha_shape"][k]["ab"][:]
+      for simplex, ab in zip(simplices, ab_values):
+        interval_dict[tuple(simplex)] = ab.tolist()
+
+    self.alpha_shape = AlphaShape(interval_dict, self.all_pos)
+
+  def alpha_surface(self, alpha=1.6):
+    """For a given value of alpha, return all surfaces, ordered by size.
+    """
+    all_pos = self.all_pos
+    all_facets = list(self.alpha_shape.get_facets(alpha))
+    # Construct the graph
+    edges = {x for y in all_facets for x in circular_subgroup(y, 2)}
+    nodes = {x for y in edges for x in y}
+    g = nx.Graph()
+    g.add_nodes_from(nodes)
+    g.add_edges_from(edges)
+
+    points = self.alpha_shape.coords.astype(np.float32)
+
+    surfaces = []
+
+    # Iterate over subgraphs, ordered by size.
+    for sg in (sorted(nx.connected_component_subgraphs(g),
+        key=lambda x: len(x),
+        reverse=True)):
+
+      valid_nodes = set(sg.nodes())
+
+      # Filter facets
+      facet_vert_idxs = np.array([x for x in all_facets if all_in(x, valid_nodes)])
+      facet_vert_coords = np.array([all_pos[x] for x in facet_vert_idxs], dtype=np.float32)
+
+      flip_order = [1, 0, 2]
+      flip_facet_vert_coords = facet_vert_coords[:, flip_order, :]
+      # Precompute norms
+      facet_norms = np.cross(facet_vert_coords[:,0,:] - facet_vert_coords[:,1,:],
+                              facet_vert_coords[:,1,:] - facet_vert_coords[:,2,:])
+      flip_facet_norms = np.cross(flip_facet_vert_coords[:,0,:] - flip_facet_vert_coords[:,1,:],
+                                  flip_facet_vert_coords[:,1,:] - flip_facet_vert_coords[:,2,:])
+
+      # Ensure consistent vertex ordering
+      # Check that the normal of each facet is in the same direction as its neighbour.
+
+      vert_idx_facet_idx_lu = defaultdict(set)
+      for facet_idx, facet in enumerate(facet_vert_idxs):
+        for vert_idx in facet:
+          vert_idx_facet_idx_lu[vert_idx].add(facet_idx)
+
+      facet_neighbor_lu = defaultdict(set)
+      for facet_idx, facet in enumerate(facet_vert_idxs):
+        c = Counter()
+        for vert_idx in facet:
+          c.update(vert_idx_facet_idx_lu[vert_idx] - set([facet_idx]))
+        facet_neighbor_lu[facet_idx] = {x for x, n in c.items() if n >= 2 }
+
+      processed_facets = set([0])
+      d = deque()
+      d.append(0)
+      while True:
+        try:
+          facet_idx = d.popleft()
+        except IndexError:
+          break
+
+        facet_n = facet_norms[facet_idx]
+
+        # Neighboring facets
+        neighbor_idxs = facet_neighbor_lu[facet_idx] - processed_facets
+
+        for neighbor_idx in neighbor_idxs:
+          neighbor_n = facet_norms[neighbor_idx]
+          proj = np.dot(facet_n, neighbor_n)
+
+          if proj < 0:
+            t = facet_vert_coords[neighbor_idx]
+            t_ = facet_norms[neighbor_idx]
+
+            facet_vert_coords[neighbor_idx] = flip_facet_vert_coords[neighbor_idx]
+            facet_norms[neighbor_idx] = flip_facet_norms[neighbor_idx]
+
+            flip_facet_vert_coords[neighbor_idx] = t
+            flip_facet_norms[neighbor_idx] = t_
+
+
+          if proj != 0:
+            d.append(neighbor_idx)
+            processed_facets.add(neighbor_idx)
+
+      surfaces.append(facet_vert_coords)
+    return(surfaces)
+
+
+  def surface_dists(self, alpha=1.6, to_calc=None):
     """Store the absolute distance of each particle from each surface.
     It is likely that there will be multiple disconnected surfaces found. The
     outer surface will be valid, as will an inner surface if present.
@@ -159,58 +292,24 @@ class NucFrame(object):
     Use a value of alpha to define the surface, and a percentage to decide how
     big stored subgraphs should be.
     """
-    all_positions = []
 
-    nuc = h5py.File(nuc_file, 'r')
-    chrm_parts = nuc["structures"]["0"]["coords"]
+    if to_calc is None:
+      to_calc = [0]
 
-    for chrm in chrms:
-      positions = chrm_parts[chrm][:]
-      all_positions.append(positions[0, :, :])
+    all_pos = self.all_pos
 
-    all_positions = np.vstack(all_positions)
-    alpha_shape = AlphaShape(all_positions)
+    surfaces = self.alpha_surface(alpha)
 
-    facets = list(alpha_shape.get_facets(alpha))
+    all_dists = []
+    for i, facets in enumerate(surfaces):
+      if i in to_calc:
+        surface_dists = np.min(points_tris_dists(valid_facets, all_pos), axis=1)
+        all_dists.append(surface_dists)
 
-    # Construct the graph
-    edges = {frozenset(x) for y in facets for x in combinations(y, 2)}
-    nodes = {x for y in edges for x in y}
-    g = nx.Graph()
-    g.add_nodes_from(nodes)
-    g.add_edges_from(edges)
-
-    # Iterate over subgraphs, ordered by size.
-    for i, sg in enumerate(sorted(
-        nx.connected_component_subgraphs(g),
-        key=lambda x: len(x),
-        reverse=True)):
-
-      valid_nodes = set(sg.nodes())
-      # Filter facets
-      valid_facets = np.array(
-          [alpha_shape.coords[list(x)] for x in facets if x <= valid_nodes],
-          dtype=np.float32)
-
-      base_surface_dists_path = os.path.join("depths", str(i))
-
-      # Store distances for points in each chromosome vs subgraph surface.
-      if len(valid_nodes) / all_positions.shape[0] >= perc:
-        store.create_dataset(os.path.join(base_surface_dists_path, "alpha"), data=alpha)
-        for chrm in chrms:
-          positions = chrm_parts[chrm][0,:,:].astype(np.float32)
-          surface_dists = np.min(points_tris_dists(valid_facets, positions), axis=1)
-          store.create_dataset(os.path.join(base_surface_dists_path, chrm), data=surface_dists)
-          logging.info("Inserted distances from chrm {} particles to surface {}".format(chrm, i))
-
-      # Store surfaces, even those we didn't measure distance for.
-      surf_path = os.path.join("surface", str(i))
-      facet_indices = np.array([list(x) for x in facets if x <= valid_nodes])
-      store.create_dataset(surf_path, data=facet_indices)
-      logging.info("Inserted surface verticies for {}".format(i))
+    return(all_dists)
 
 
-  def __init__(self, nuc_slice_file, chrm_limit_dict=None):
+  def __init__(self, nuc_slice_file, chrm_limit_dict=None, mode="r"):
     """HDF5 hierarchy:
     name :: String -- the name of the NucFrame
     bin_size :: Int -- the common bin_size of the nuc files.
@@ -221,15 +320,31 @@ class NucFrame(object):
     dists/chrm/chrm :: [[Float]] -- (bead_idx, bead_idx), distanes between beads.
     depths/i/alpha :: Float -- alpha value used to calculate depths.
     depths/i/chrm/ :: [Float] -- (bead_idx, ), depth of point from surface i.
+    alpha_shape/k/simplices :: [[Int]] -- (n_simplicies, k), indices of k-simplices.
+    alpha_shape/k/ab :: [(a, b)] -- (n_simplicies, 2), a and b values for k-simplices.
+                        ^ -- NOTE: length of the two alpha_shape entries align.
     surface/i :: [[Int]] -- vertices of triangles that form surface i.
                             index is relative to positions vstacked by chromosome.
     """
-    self.store = h5py.File(nuc_slice_file, 'r', libvar="latest")
+    self.store = h5py.File(nuc_slice_file, mode, libvar="latest")
+    self.nuc_slice_file = nuc_slice_file
     chromosomes = [x.decode("utf-8") for x in self.store["chrms"]]
     if not chrm_limit_dict:
       chrm_limit_dict = {chrm: (None, None) for chrm in chromosomes}
 
     self.chrms = Chromosomes(self.store, chromosomes, chrm_limit_dict)
+    self._load_alpha_shape()
+
+  @property
+  def all_pos(self):
+    all_positions = []
+    for chrm in self.chrms:
+      all_positions.append(chrm.positions[0,:,:])
+
+    all_positions = np.vstack(all_positions)
+    return(all_positions)
+
+
 
 class Chromosomes(object):
   def __init__(self, store, chromosomes, chrm_limit_dict):
@@ -246,17 +361,24 @@ class Chromosomes(object):
       lower, upper = self.chrm_limit_dict[chrm]
       yield (Chromosome(self.store, chrm, lower, upper))
 
+def all_in(tup, s):
+  for t in tup:
+    if not t in s:
+      return False
+  return True
+
 
 if __name__ == "__main__":
   import glob
 
   logging.basicConfig(level=logging.INFO)
   slice_path = "/mnt/SSD/LayeredNuc/frames/"
+  # nf = NucFrame(os.path.join(slice_path, "Q5_ambig_10x_100kb.hdf5"))
+  # nf.alpha_surface()
   # for nuc_file in glob.glob("/home/lpa24/dev/cam/data/edl_chromo/mm10/single_cell_nuc_100k/ambig/*"):
-  #   print(nuc_file)
   #   slice_file = os.path.join(slice_path, os.path.splitext(os.path.basename(nuc_file))[0] + ".hdf5")
   #   nf = NucFrame.from_nuc(nuc_file, slice_file)
-    #nf = NucFrame(slice_file)
+    # nf = NucFrame(slice_file)
 
   old_file_path = "/home/lpa24/dev/cam/data/edl_chromo/mm10/old_single_cell_nuc_100k/"
   old_files = ["S1028_GTGAAA_06_10x_100kb_mm10.nuc",
@@ -285,7 +407,9 @@ if __name__ == "__main__":
   for nuc_file in old_paths:
     print(nuc_file)
     try:
-      slice_file = os.path.join(slice_path, os.path.splitext(os.path.basename(nuc_file))[0] + ".hdf5")
+      base_name = os.path.splitext(os.path.basename(nuc_file))[0]
+      name = "_".join(base_name.split("_")[:-3])
+      slice_file = os.path.join(slice_path,  "{}.hdf5".format(name))
       nf = NucFrame.from_nuc(nuc_file, slice_file)
     except ValueError as e:
       print(e)
