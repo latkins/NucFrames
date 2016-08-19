@@ -64,11 +64,11 @@ class Chromosome(object):
 
   @property
   def expr_contacts(self):
-    return(self.store["expr_contacts"][self.chrm][self.chrm][:][self.valid, self.valid])
+    return(self.store["expr_contacts"][self.chrm][self.chrm][:][self.valid,:][:, self.valid])
 
   @property
   def dists(self):
-    return(self.store["dists"][self.chrm][self.chrm][:][self.valid, self.valid])
+    return(self.store["dists"][self.chrm][self.chrm][:][self.valid, :][:, self.valid])
 
   @property
   def positions(self):

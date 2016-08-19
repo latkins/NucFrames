@@ -31,7 +31,7 @@ class NucFrame(object):
   """
 
   @classmethod
-  def from_nuc(cls, nuc_files, nuc_slice_file):
+  def from_nuc(cls, nuc_file, nuc_slice_file):
     """
     Factory to produce a NucFrame (and the associated file) from a
     .nuc file.
@@ -439,11 +439,20 @@ def all_exterior_depths():
     nf.store_surface_dists(alpha)
     nf.store_surface_dists_tag(alpha, "EXTERNAL")
 
+
 if __name__ == "__main__":
   import glob
 
-  all_exterior_depths()
-  logging.basicConfig(level=logging.INFO)
+
+  # NucFrame.from_nuc("/home/lpa24/dev/cam/data/edl_chromo/mm10/old_single_cell_nuc_100k/S1112_NXT-55_18_10x_100kb_mm10.nuc",
+  #                   "/mnt/SSD/tmp/NXT_55.hdf5" )
+
+  nf = NucFrame("/mnt/SSD/tmp/UpL13_ambig_10x_100kb.hdf5")
+  print(nf.store["dists"]["1"]["1"][:].shape)
+  print(np.sum(nf.chrms["1"].dists))
+
+  #all_exterior_depths()
+  #logging.basicConfig(level=logging.INFO)
   # slice_path = "/mnt/SSD/LayeredNuc/frames/"
   # nf = NucFrame(os.path.join(slice_path, "Q5_ambig_10x_100kb.hdf5"))
   # nf.alpha_surface()
