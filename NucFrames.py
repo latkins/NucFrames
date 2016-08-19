@@ -1,6 +1,7 @@
 import numpy as np
 from collections import defaultdict
 import h5py
+from tqdm import tqdm
 
 from NucFrame import NucFrame
 from utils import bp_to_idx
@@ -54,16 +55,20 @@ class NucFrames(object):
 
     track_dict = {}
 
-    for chrm in set(self.common_chrms) & set(track.keys()):
+    for chrm in tqdm(set(self.common_chrms) & set(track.keys())):
       chrm_bps = self.chrm_bps(chrm)
-      regions = track[chrm]["regions"]
+      regions = track[chrm]["regions"][:].astype(np.int32)
+      values = track[chrm]["values"]
 
       vals = np.zeros_like(chrm_bps)
 
       starts = regions[:, 0]
       ends = regions[:, 1]
+      a = np.argmax(np.abs(ends - starts))
       for start, end in zip(starts, ends):
-        track_region_bps = np.arange(start, end, 1000) # TODO: Hard coding here is bad.
+        if start > end:
+          start, end = end, start
+        track_region_bps = np.arange(start, end, 10000, dtype=np.int32) # TODO: Hard coding here is bad.
         idxs, valid = bp_to_idx(track_region_bps, chrm_bps, bin_size=self.bin_size)
         idxs = np.unique(idxs[valid])
         vals[idxs] = 1

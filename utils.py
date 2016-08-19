@@ -11,6 +11,23 @@ def filter_bps(bp_arr, pos_arr, bin_size):
     return(idxs)
 
 
+@jit("float32[:](int32[:], int32[:], double)",
+    nopython=True, nogil=True, cache=True)
+def _bps_to_idx(bps, positions, bin_size):
+
+    idxs = np.empty(bps.shape[0], dtype=np.float32)
+    idxs[:] = np.nan
+    for i in range(bps.shape[0]):
+        bp = bps[i]
+        for j in range(positions.shape[0]):
+            pos = positions[j]
+            if (bp >= pos) and (bp < pos + bin_size):
+                idxs[i] = j
+                break
+    return(idxs)
+
+
+
 def bp_to_idx(bp_arr, pos_arr, bin_size):
     """
     :: [bp] -> [bp] -> bp -> ([idx], [valid_idx_idx])
@@ -19,21 +36,6 @@ def bp_to_idx(bp_arr, pos_arr, bin_size):
     with nan in invalid entries.
     Also return a list of valid indexes.
     """
-    @jit(nopython=True, nogil=True, cache=True)
-    def _bps_to_idx(bps, positions, bin_size):
-
-        idxs = np.empty(bps.shape[0])
-        idxs[:] = np.nan
-        for i in range(bps.shape[0]):
-            bp = bps[i]
-            for j in range(positions.shape[0]):
-                pos = positions[j]
-                if (bp >= pos) and (bp < pos + bin_size):
-                    idxs[i] = j
-                    break
-        return(idxs)
-
-
     idx_arr = _bps_to_idx(bp_arr, pos_arr, bin_size)
     valid_input_idxs = ~np.isnan(idx_arr)
 

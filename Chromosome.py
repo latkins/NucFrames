@@ -60,11 +60,10 @@ class Chromosome(object):
 
   @property
   def bp_pos(self):
-    return(self.store["bp_pos"][self.chrm][:][self.valid])
+    return(self.store["bp_pos"][self.chrm][:][self.valid].astype(np.int32))
 
   @property
   def expr_contacts(self):
-    print(self.store["expr_contacts"][self.chrm][self.chrm][:].T.shape)
     return(self.store["expr_contacts"][self.chrm][self.chrm][:][self.valid, self.valid])
 
   @property

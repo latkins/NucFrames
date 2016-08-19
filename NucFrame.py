@@ -193,13 +193,16 @@ class NucFrame(object):
       simplices = self.store["alpha_shape"][k]["simplices"][:]
       ab_values = self.store["alpha_shape"][k]["ab"][:]
       for simplex, ab in zip(simplices, ab_values):
-        interval_dict[tuple(simplex)] = ab.tolist()
+        interval_dict[tuple(simplex)] = ab
 
     self.alpha_shape = AlphaShape(interval_dict, self.all_pos)
 
   def alpha_surface(self, alpha=1.6):
     """For a given value of alpha, return all surfaces, ordered by size.
     """
+    if not self.alpha_shape:
+      self._load_alpha_shape()
+
     all_pos = self.all_pos
     all_facets = list(self.alpha_shape.get_facets(alpha))
     # Construct the graph
@@ -351,6 +354,7 @@ class NucFrame(object):
     surface_dist/alpha_val/tag :: optional tag for this value of alpha.
     surface_dist/alpha_val/i/surface_size :: size of surface i for alpha
     """
+    self.alpha_shape = None
     self.store = h5py.File(nuc_slice_file, mode, libvar="latest")
     self.nuc_slice_file = nuc_slice_file
     chromosomes = [x.decode("utf-8") for x in self.store["chrms"]]
@@ -358,7 +362,6 @@ class NucFrame(object):
       chrm_limit_dict = {chrm: (None, None) for chrm in chromosomes}
 
     self.chrms = Chromosomes(self.store, chromosomes, chrm_limit_dict)
-    self._load_alpha_shape()
 
   @property
   def all_pos(self):
