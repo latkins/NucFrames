@@ -48,7 +48,7 @@ class NucFrame(object):
     store["chrms"] = cls._extract_chrms(nuc_file)
     chrms = [x.decode("utf8") for x in store["chrms"]]
     store["bin_size"] = cls._get_bin_size(nuc_file, chrms)
-    store["name"] = cls._get_name(nuc_file)
+    store.attrs["name"] = cls._get_name(nuc_file)
     cls._store_bp_positions(nuc_file, store, chrms)
     cls._store_expr_contacts(nuc_file, store, chrms)
     cls._store_dists(nuc_file, store, chrms)
@@ -157,14 +157,31 @@ class NucFrame(object):
           "name"]))
 
   @staticmethod
-  def _store_alpha_shape(store, chrms):
+  def _store_alpha_shape(store, chrms, void_dict=None):
     "Calculates and stores an AlphaShape."
 
     all_positions = []
+    all_filtered_idx = []
+    idx_offset = 0
     for chrm in chrms:
-      all_positions.append(store["position"][chrm][0,:,:])
+      chrm_pos = store["position"][chrm][0,:,:]
+      all_idx = np.arange(chrm_pos.shape[0])
+      try:
+        void = void_dict[chrm]
+      except TypeError:
+        void = np.zeros_like(all_idx).astype(np.bool)
+
+      filtered_idx = all_idx[~void]
+      filtered_pos = chrm_pos[~void]
+
+      filtered_offset_idx = filtered_idx + offset
+      offset += filtered_pos.shape[0]
+
+      all_positions.append(filtered_pos)
+      all_filtered_idx.append(filtered_idx)
 
     all_positions = np.vstack(all_positions)
+    filtered_idx = np.vstack(all_filtered_idx)
 
     # Store alpha_shape.interval_dict
     alpha_shape = AlphaShape.from_points(all_positions)
@@ -178,6 +195,8 @@ class NucFrame(object):
       ab_values = []
       for simplex, (a, b) in alpha_shape.interval_dict.items():
         if len(simplex) == k:
+          # Convert back to unfiltered coordinates.
+          simplex = tuple(filtered_idx[simplex.asarray()])
           simplices.append(simplex)
           ab_values.append([a,b])
 
@@ -372,6 +391,28 @@ class NucFrame(object):
     all_positions = np.vstack(all_positions)
     return(all_positions)
 
+  @property
+  def all_pos_all_models(self):
+    all_positions = []
+    for chrm in self.chrms:
+      pos = chrm.positions[:,:,:]
+      all_positions.append(pos)
+
+    all_positions = np.concatenate(all_positions, 1)
+    return(all_positions)
+
+  @property
+  def cell_name(self):
+    return(self.store.attrs["name"])
+
+  @property
+  def all_rmsd(self):
+    pos = self.all_pos_all_models
+    mean_pos = np.mean(pos, axis=0)
+    sq_vec_diff = np.square(pos - mean_pos)
+    sq_diff = sq_vec_diff[:, :, 0] + sq_vec_diff[:, :, 1] + sq_vec_diff[:, :, 2]
+    rmsd = np.mean(sq_diff, axis=0)
+    return(rmsd)
 
 
 class Chromosomes(object):
@@ -448,8 +489,6 @@ if __name__ == "__main__":
   #                   "/mnt/SSD/tmp/NXT_55.hdf5" )
 
   nf = NucFrame("/mnt/SSD/tmp/UpL13_ambig_10x_100kb.hdf5")
-  print(nf.store["dists"]["1"]["1"][:].shape)
-  print(np.sum(nf.chrms["1"].dists))
 
   #all_exterior_depths()
   #logging.basicConfig(level=logging.INFO)
