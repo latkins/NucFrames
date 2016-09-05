@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import h5py
-from itertools import combinations_with_replacement, combinations
+from itertools import combinations_with_replacement, combinations, product
 import logging
 from tqdm import tqdm
 import networkx as nx
@@ -12,11 +12,13 @@ from distance_utils.all_pairs_euc_dist import nuc_dist_pairs
 from depth_utils.alpha_shape import AlphaShape, circular_subgroup
 from depth_utils.point_surface_dist import points_tris_dists
 from Chromosome import Chromosome
+from Trans import Trans
+
 
 def surf_norm(tri):
   a = tri[1] - tri[0]
   b = tri[2] - tri[0]
-  return(np.cross(a, b))
+  return (np.cross(a, b))
 
 
 class NucFrame(object):
@@ -54,7 +56,7 @@ class NucFrame(object):
     cls._store_dists(nuc_file, store, chrms)
     cls._store_positions(nuc_file, store, chrms)
     cls._store_alpha_shape(store, chrms)
-    return(cls(nuc_slice_file))
+    return (cls(nuc_slice_file))
 
   @staticmethod
   def _extract_chrms(nuc_file):
@@ -72,7 +74,7 @@ class NucFrame(object):
       sizes = sizes.union(set(chrm_sizes))
 
     # TODO: I need some messed up files to work.
-    sizes = {math.floor(x  / 1000) * 1000 for x in sizes}
+    sizes = {math.floor(x / 1000) * 1000 for x in sizes}
     if len(sizes) != 1:
       raise ValueError("Inconsistent bin sizes: {}".format(len(sizes)))
     else:
@@ -96,14 +98,14 @@ class NucFrame(object):
     for chrm in chrms:
       positions = chrm_parts[chrm]["positions"][:]
 
-      positions = [math.floor(x  / 1000) * 1000 for x in positions]
+      positions = [math.floor(x / 1000) * 1000 for x in positions]
 
       if np.all(np.sort(positions) != positions):
         raise ValueError("Positions not in sorted order.")
 
       store.create_dataset(os.path.join("bp_pos", chrm), data=positions)
       logging.info("Stored basepair positions for chrm {} in {}".format(
-          chrm, store["name"]))
+          chrm, store.attrs["name"]))
 
   @staticmethod
   def _store_expr_contacts(nuc_file, store, chrms):
@@ -156,49 +158,48 @@ class NucFrame(object):
       logging.info("Created positions for chrm {} in {}".format(chrm, store[
           "name"]))
 
-  @staticmethod
-  def _store_alpha_shape(store, chrms, void_dict=None):
-    "Calculates and stores an AlphaShape."
+  def _store_alpha_shape(self, rmsd_lim=5):
+    """Calculates and stores an AlphaShape.
+    If called from a NucFrames group, will be incorrect, as not all positions would
+    be considered."""
+    store = self.store
 
     all_positions = []
-    all_filtered_idx = []
+    all_void = []
     idx_offset = 0
-    for chrm in chrms:
-      chrm_pos = store["position"][chrm][0,:,:]
-      all_idx = np.arange(chrm_pos.shape[0])
-      try:
-        void = void_dict[chrm]
-      except TypeError:
-        void = np.zeros_like(all_idx).astype(np.bool)
+    for chrm in self.chrms:
+      chrm_pos = chrm.positions[0, :, :]
+      chrm_rmsd = chrm.rmsd
 
-      filtered_idx = all_idx[~void]
-      filtered_pos = chrm_pos[~void]
+      void = chrm_rmsd < rmsd_lim
 
-      filtered_offset_idx = filtered_idx + offset
-      offset += filtered_pos.shape[0]
+      all_void.append(void)
+      all_positions.append(chrm_pos)
 
-      all_positions.append(filtered_pos)
-      all_filtered_idx.append(filtered_idx)
 
+    all_void = np.concatenate(all_void)
     all_positions = np.vstack(all_positions)
-    filtered_idx = np.vstack(all_filtered_idx)
+    all_idx = np.arange(all_positions.shape[0])
+
+    filtered_pos = all_positions[all_void]
+    filtered_idx = all_idx[all_void]
 
     # Store alpha_shape.interval_dict
-    alpha_shape = AlphaShape.from_points(all_positions)
+    alpha_shape = AlphaShape.from_points(filtered_pos)
     try:
-      del(store["alpha_shape"])
+      del (store["alpha_shape"])
     except KeyError as e:
       pass
 
-    for k in { len(x) for x in alpha_shape.interval_dict.keys() }:
+    for k in {len(x) for x in alpha_shape.interval_dict.keys()}:
       simplices = []
       ab_values = []
       for simplex, (a, b) in alpha_shape.interval_dict.items():
         if len(simplex) == k:
           # Convert back to unfiltered coordinates.
-          simplex = tuple(filtered_idx[simplex.asarray()])
+          simplex = tuple(filtered_idx[np.array(simplex)])
           simplices.append(simplex)
-          ab_values.append([a,b])
+          ab_values.append([a, b])
 
       path = os.path.join("alpha_shape", str(k))
       store.create_dataset(os.path.join(path, "simplices"), data=simplices)
@@ -236,23 +237,29 @@ class NucFrame(object):
     surfaces = []
 
     # Iterate over subgraphs, ordered by size.
-    for sg in (sorted(nx.connected_component_subgraphs(g),
+    for sg in (sorted(
+        nx.connected_component_subgraphs(g),
         key=lambda x: len(x),
         reverse=True)):
 
       valid_nodes = set(sg.nodes())
 
       # Filter facets
-      facet_vert_idxs = np.array([x for x in all_facets if all_in(x, valid_nodes)])
-      facet_vert_coords = np.array([all_pos[x] for x in facet_vert_idxs], dtype=np.float32)
+      facet_vert_idxs = np.array(
+          [x for x in all_facets if all_in(x, valid_nodes)])
+      facet_vert_coords = np.array(
+          [all_pos[x] for x in facet_vert_idxs],
+          dtype=np.float32)
 
       flip_order = [1, 0, 2]
       flip_facet_vert_coords = facet_vert_coords[:, flip_order, :]
       # Precompute norms
-      facet_norms = np.cross(facet_vert_coords[:,0,:] - facet_vert_coords[:,1,:],
-                              facet_vert_coords[:,1,:] - facet_vert_coords[:,2,:])
-      flip_facet_norms = np.cross(flip_facet_vert_coords[:,0,:] - flip_facet_vert_coords[:,1,:],
-                                  flip_facet_vert_coords[:,1,:] - flip_facet_vert_coords[:,2,:])
+      facet_norms = np.cross(
+          facet_vert_coords[:, 0, :] - facet_vert_coords[:, 1, :],
+          facet_vert_coords[:, 1, :] - facet_vert_coords[:, 2, :])
+      flip_facet_norms = np.cross(
+          flip_facet_vert_coords[:, 0, :] - flip_facet_vert_coords[:, 1, :],
+          flip_facet_vert_coords[:, 1, :] - flip_facet_vert_coords[:, 2, :])
 
       # Ensure consistent vertex ordering
       # Check that the normal of each facet is in the same direction as its neighbour.
@@ -267,7 +274,7 @@ class NucFrame(object):
         c = Counter()
         for vert_idx in facet:
           c.update(vert_idx_facet_idx_lu[vert_idx] - set([facet_idx]))
-        facet_neighbor_lu[facet_idx] = {x for x, n in c.items() if n >= 2 }
+        facet_neighbor_lu[facet_idx] = {x for x, n in c.items() if n >= 2}
 
       processed_facets = set([0])
       d = deque()
@@ -291,20 +298,19 @@ class NucFrame(object):
             t = facet_vert_coords[neighbor_idx]
             t_ = facet_norms[neighbor_idx]
 
-            facet_vert_coords[neighbor_idx] = flip_facet_vert_coords[neighbor_idx]
+            facet_vert_coords[neighbor_idx] = flip_facet_vert_coords[
+                neighbor_idx]
             facet_norms[neighbor_idx] = flip_facet_norms[neighbor_idx]
 
             flip_facet_vert_coords[neighbor_idx] = t
             flip_facet_norms[neighbor_idx] = t_
-
 
           if proj != 0:
             d.append(neighbor_idx)
             processed_facets.add(neighbor_idx)
 
       surfaces.append(facet_vert_coords)
-    return(surfaces)
-
+    return (surfaces)
 
   def store_surface_dists_tag(self, alpha, tag):
     """
@@ -316,16 +322,16 @@ class NucFrame(object):
     path = "surface_dist"
 
     # Check tag isn't already present
-    for alpha in self.store[path].keys():
+    for test_alpha in self.store[path].keys():
       try:
-        t = self.store[path][alpha]["tag"][()]
+        t = self.store[path][test_alpha].attrs["tag"]
       except KeyError:
         pass
       else:
-        assert t != tag
+        del self.store[path][test_alpha].attrs["tag"]
 
-    path = os.path.join("surface_dist", str(alpha), "tag")
-    self.store.create_dataset(path, data=tag)
+    path = os.path.join("surface_dist", str(alpha))
+    self.store[path].attrs["tag"] = tag
 
   def store_surface_dists(self, alpha=1.6):
     """Store the absolute distance of each particle from each surface.
@@ -348,15 +354,18 @@ class NucFrame(object):
 
       # Store information about surface.
       path = os.path.join("surface_dist", str(alpha), str(i))
-      self.store.create_dataset(os.path.join(path, "surface_size"), data=surface_size)
+      self.store.create_dataset(
+          os.path.join(path, "surface_size"),
+          data=surface_size)
 
       for chrm in self.chrms:
-        chrm_pos = chrm.positions[0,:,:].astype(np.float32)
+        chrm_pos = chrm.positions[0, :, :].astype(np.float32)
         surface_dists = np.min(points_tris_dists(facets, chrm_pos), axis=1)
-        self.store.create_dataset(os.path.join(path, chrm.chrm), data=surface_dists)
+        self.store.create_dataset(
+            os.path.join(path, chrm.chrm),
+            data=surface_dists)
 
-
-  def __init__(self, nuc_slice_file, chrm_limit_dict=None, mode="r"):
+  def __init__(self, nuc_slice_file, chrm_limit_dict=None, mode="r", rmsd_lim=8):
     """HDF5 hierarchy:
     name :: String -- the name of the NucFrame
     bin_size :: Int -- the common bin_size of the nuc files.
@@ -381,38 +390,45 @@ class NucFrame(object):
       chrm_limit_dict = {chrm: (None, None) for chrm in chromosomes}
 
     self.chrms = Chromosomes(self.store, chromosomes, chrm_limit_dict)
+    self.trans = TransGroup(self.store, chromosomes, chrm_limit_dict)
+
+    try:
+      self.store["alpha_shape"]
+    except KeyError:
+      self._store_alpha_shape(rmsd_lim=rmsd_lim)
 
   @property
   def all_pos(self):
     all_positions = []
     for chrm in self.chrms:
-      all_positions.append(chrm.positions[0,:,:])
+      all_positions.append(chrm.positions[0, :, :])
 
     all_positions = np.vstack(all_positions)
-    return(all_positions)
+    return (all_positions)
 
   @property
   def all_pos_all_models(self):
     all_positions = []
     for chrm in self.chrms:
-      pos = chrm.positions[:,:,:]
+      pos = chrm.positions[:, :, :]
       all_positions.append(pos)
 
     all_positions = np.concatenate(all_positions, 1)
-    return(all_positions)
+    return (all_positions)
 
   @property
   def cell_name(self):
-    return(self.store.attrs["name"])
+    return (self.store.attrs["name"])
 
   @property
   def all_rmsd(self):
     pos = self.all_pos_all_models
     mean_pos = np.mean(pos, axis=0)
     sq_vec_diff = np.square(pos - mean_pos)
-    sq_diff = sq_vec_diff[:, :, 0] + sq_vec_diff[:, :, 1] + sq_vec_diff[:, :, 2]
+    sq_diff = sq_vec_diff[:, :, 0] + sq_vec_diff[:, :, 1] + sq_vec_diff[:, :,
+                                                                        2]
     rmsd = np.mean(sq_diff, axis=0)
-    return(rmsd)
+    return (rmsd)
 
 
 class Chromosomes(object):
@@ -430,6 +446,21 @@ class Chromosomes(object):
       lower, upper = self.chrm_limit_dict[chrm]
       yield (Chromosome(self.store, chrm, lower, upper))
 
+class TransGroup(object):
+  def __init__(self, store, chromosomes, chrm_limit_dict):
+    self.store = store
+    self.chrms = chromosomes
+    self.chrm_limit_dict = chrm_limit_dict
+
+  def __getitem__(self, chrm_tuple):
+    chrm_a, chrm_b = chrm_tuple
+    return (Trans(self.store, chrm_a, chrm_b, self.chrm_limit_dict))
+
+  def __iter__(self):
+    for (chrm_a, chrm_b) in product(self.chrms, repeat=2):
+      yield (Trans(self.store, chrm_a, chrm_b, self.chrm_limit_dict))
+
+
 def all_in(tup, s):
   for t in tup:
     if not t in s:
@@ -445,7 +476,7 @@ def all_exterior_depths():
   slice_path = "/mnt/SSD/LayeredNuc/frames/"
   nf_alpha_pairs = [("P2E8_ambig_10x_100kb.hdf5", 3.4),
                     ("P36D6_ambig_10x_100kb.hdf5", 4.0),
-                    # ("1028_GTGAAA_06.hdf5", 4.0),
+    # ("1028_GTGAAA_06.hdf5", 4.0),
                     ("S1112_NXT-48_08.hdf5", 3.2),
                     ("S1112_NXT-58_21.hdf5", 3.5),
                     ("S1225_NXT-32_01.hdf5", 4.4),
@@ -474,6 +505,7 @@ def all_exterior_depths():
                     ("S1112_NXT-68_14.hdf5", 2.6),
                     ("UpL13_ambig_10x_100kb.hdf5", 3.2)]
   for nf_name, alpha in nf_alpha_pairs:
+    alpha = 5.0
     print(nf_name)
     path = os.path.join(slice_path, nf_name)
     nf = NucFrame(path, mode='a')
@@ -481,57 +513,60 @@ def all_exterior_depths():
     nf.store_surface_dists_tag(alpha, "EXTERNAL")
 
 
+def make_frames(slice_path):
+  for nuc_file in glob.glob(
+      "/home/lpa24/dev/cam/data/edl_chromo/mm10/single_cell_nuc_100k/ambig/*"):
+    slice_file = os.path.join(
+        slice_path,
+        os.path.splitext(os.path.basename(nuc_file))[0] + ".hdf5")
+    nf = NucFrame.from_nuc(nuc_file, slice_file)
+
+  old_file_path = "/home/lpa24/dev/cam/data/edl_chromo/mm10/old_single_cell_nuc_100k/"
+  old_files = ["S1028_GTGAAA_06_10x_100kb_mm10.nuc",
+               "S1112_NXT-46_06_10x_100kb_mm10.nuc",
+               "S1112_NXT-55_18_10x_100kb_mm10.nuc",
+               "S1112_NXT-65_11_10x_100kb_mm10.nuc",
+               "S1227_NXT-34_02_10x_100kb_mm10.nuc",
+               "S1028_TGACCA_07_10x_100kb_mm10.nuc",
+               "S1112_NXT-48_08_10x_100kb_mm10.nuc",
+               "S1112_NXT-57_20_10x_100kb_mm10.nuc",
+               "S1112_NXT-67_13_10x_100kb_mm10.nuc",
+               "S1227_NXT-36_04_10x_100kb_mm10.nuc",
+               "S1028_ACAGTG_01_10x_100kb_mm10.nuc",
+               "S1112_NXT-44_04_10x_100kb_mm10.nuc",
+               "S1112_NXT-52_15_10x_100kb_mm10.nuc",
+               "S1112_NXT-58_21_10x_100kb_mm10.nuc",
+               "S1112_NXT-68_14_10x_100kb_mm10.nuc",
+               "S1227_NXT-41_06_10x_100kb_mm10.nuc",
+               "S1028_CCGTCC_03_10x_100kb_mm10.nuc",
+               "S1112_NXT-45_05_10x_100kb_mm10.nuc",
+               "S1112_NXT-53_16_10x_100kb_mm10.nuc",
+               "S1112_NXT-63_09_10x_100kb_mm10.nuc",
+               "S1225_NXT-32_01_10x_100kb_mm10.nuc"]
+
+  old_paths = [os.path.join(old_file_path, x) for x in old_files]
+  for nuc_file in old_paths:
+    print(nuc_file)
+    try:
+      base_name = os.path.splitext(os.path.basename(nuc_file))[0]
+      name = "_".join(base_name.split("_")[:-3])
+      slice_file = os.path.join(slice_path, "{}.hdf5".format(name))
+      nf = NucFrame.from_nuc(nuc_file, slice_file)
+    except ValueError as e:
+      print(e)
+
+
 if __name__ == "__main__":
   import glob
 
-
-  # NucFrame.from_nuc("/home/lpa24/dev/cam/data/edl_chromo/mm10/old_single_cell_nuc_100k/S1112_NXT-55_18_10x_100kb_mm10.nuc",
-  #                   "/mnt/SSD/tmp/NXT_55.hdf5" )
-
-  nf = NucFrame("/mnt/SSD/tmp/UpL13_ambig_10x_100kb.hdf5")
+  for f in glob.glob("/mnt/SSD/LayeredNuc/frames/*.hdf5"):
+     nf = NucFrame(f)
+     for t in nf.trans:
+       print(t.chrm_a.chrm, t.chrm_b.chrm)
+       print(t.dists.shape)
 
   #all_exterior_depths()
+
   #logging.basicConfig(level=logging.INFO)
-  # slice_path = "/mnt/SSD/LayeredNuc/frames/"
-  # nf = NucFrame(os.path.join(slice_path, "Q5_ambig_10x_100kb.hdf5"))
-  # nf.alpha_surface()
-  # for nuc_file in glob.glob("/home/lpa24/dev/cam/data/edl_chromo/mm10/single_cell_nuc_100k/ambig/*"):
-  #   slice_file = os.path.join(slice_path, os.path.splitext(os.path.basename(nuc_file))[0] + ".hdf5")
-  #   nf = NucFrame.from_nuc(nuc_file, slice_file)
-    # nf = NucFrame(slice_file)
-
-  # old_file_path = "/home/lpa24/dev/cam/data/edl_chromo/mm10/old_single_cell_nuc_100k/"
-  # old_files = ["S1028_GTGAAA_06_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-46_06_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-55_18_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-65_11_10x_100kb_mm10.nuc",
-  #               "S1227_NXT-34_02_10x_100kb_mm10.nuc",
-  #               "S1028_TGACCA_07_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-48_08_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-57_20_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-67_13_10x_100kb_mm10.nuc",
-  #               "S1227_NXT-36_04_10x_100kb_mm10.nuc",
-  #               "S1028_ACAGTG_01_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-44_04_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-52_15_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-58_21_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-68_14_10x_100kb_mm10.nuc",
-  #               "S1227_NXT-41_06_10x_100kb_mm10.nuc",
-  #               "S1028_CCGTCC_03_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-45_05_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-53_16_10x_100kb_mm10.nuc",
-  #               "S1112_NXT-63_09_10x_100kb_mm10.nuc",
-  #               "S1225_NXT-32_01_10x_100kb_mm10.nuc"]
-
-  # old_paths = [os.path.join(old_file_path, x) for x in old_files]
-  # for nuc_file in old_paths:
-  #   print(nuc_file)
-  #   try:
-  #     base_name = os.path.splitext(os.path.basename(nuc_file))[0]
-  #     name = "_".join(base_name.split("_")[:-3])
-  #     slice_file = os.path.join(slice_path,  "{}.hdf5".format(name))
-  #     nf = NucFrame.from_nuc(nuc_file, slice_file)
-  #   except ValueError as e:
-  #     print(e)
-
-
+  #slice_path = "/mnt/SSD/LayeredNuc/void_alpha_frames/"
+  #make_frames(slice_path)

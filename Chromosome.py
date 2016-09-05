@@ -41,7 +41,7 @@ class Chromosome(object):
     if tag:
       for k in dset.keys():
         try:
-          t = dset[k]["tag"][()]
+          t = dset[k].attrs["tag"]
         except KeyError:
           pass
         else:
@@ -73,3 +73,12 @@ class Chromosome(object):
   @property
   def positions(self):
     return(self.store["position"][self.chrm][:][:, self.valid, :])
+
+  @property
+  def rmsd(self):
+    pos = self.positions
+    mean_pos = np.mean(pos, axis=0)
+    sq_vec_diff = np.square(pos - mean_pos)
+    sq_diff = sq_vec_diff[:, :, 0] + sq_vec_diff[:, :, 1] + sq_vec_diff[:, :, 2]
+    rmsd = np.mean(sq_diff, axis=0)
+    return(rmsd)
