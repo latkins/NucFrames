@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import h5py
+from utils import bp_to_idx
 
 class Chromosome(object):
   """
@@ -15,7 +16,7 @@ class Chromosome(object):
     """
     self.store = store
     self.chrm = chrm
-    self.bin_size = store["bin_size"]
+    self.bin_size = store["bin_size"][()].astype(np.int32)
     self.valid = self.valid_idxs(lower_bp_lim, upper_bp_lim)
 
   def valid_idxs(self, lower, upper):
@@ -64,7 +65,29 @@ class Chromosome(object):
 
   @property
   def expr_contacts(self):
-    return(self.store["expr_contacts"][self.chrm][self.chrm][:][self.valid,:][:, self.valid])
+
+    size = self.bp_pos.shape[0]
+    mat = np.zeros((size, size))
+
+    bps_a = self.store["expr_contacts"][self.chrm][self.chrm][:, 0].astype(np.int32)
+    bps_b = self.store["expr_contacts"][self.chrm][self.chrm][:, 1].astype(np.int32)
+    counts = self.store["expr_contacts"][self.chrm][self.chrm][:, 2].astype(np.float32)
+
+    idxs_a, valid_a = bp_to_idx(bps_a, self.bp_pos, self.bin_size)
+    idxs_b, valid_b = bp_to_idx(bps_b, self.bp_pos, self.bin_size)
+
+    valid = np.logical_and(valid_a, valid_b)
+
+    idxs_a = idxs_a[valid]
+    idxs_b = idxs_b[valid]
+    counts = counts[valid]
+
+    mat[idxs_a, idxs_b] = counts
+    mat[idxs_b, idxs_a] = counts
+
+    return(mat)
+
+    #return(self.store["expr_contacts"][self.chrm][self.chrm][:][self.valid,:][:, self.valid])
 
   @property
   def dists(self):

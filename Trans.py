@@ -2,6 +2,7 @@ import numpy as np
 import os
 import h5py
 from Chromosome import Chromosome
+from utils import bp_to_idx
 
 
 class Trans(object):
@@ -38,10 +39,48 @@ class Trans(object):
 
   @property
   def expr_contacts(self):
+
     try:
-      return(self.store["expr_contacts"][self.chrm_a.chrm][self.chrm_b.chrm][:][self.chrm_a.valid,:][:, self.chrm_b.valid])
+      contact_data = self.store["expr_contacts"][self.chrm_a.chrm][self.chrm_b.chrm]
+      bps_a = contact_data[:, 0].astype(np.int32)
+      bps_b = contact_data[:, 1].astype(np.int32)
+      counts = contact_data[:, 2]
     except KeyError:
-      return(self.store["expr_contacts"][self.chrm_b.chrm][self.chrm_a.chrm][:][self.chrm_b.valid,:][:, self.chrm_a.valid].T)
+      # Trans contacts may be empty.
+      try:
+        contact_data = self.store["expr_contacts"][self.chrm_b.chrm][self.chrm_a.chrm]
+        bps_a = contact_data[:, 1].astype(np.int32)
+        bps_b = contact_data[:, 0].astype(np.int32)
+        counts = contact_data[:, 2]
+      except KeyError:
+        bps_a = np.array([], dtype=np.int32)
+        bps_b = np.array([], dtype=np.int32)
+        counts = np.array([])
+
+
+    size_a = self.chrm_a.bp_pos.shape[0]
+    size_b = self.chrm_b.bp_pos.shape[0]
+
+    positions_a = self.chrm_a.bp_pos
+    positions_b = self.chrm_b.bp_pos
+
+    idxs_a, valid_a = bp_to_idx(bps_a, positions_a, self.chrm_a.bin_size)
+    idxs_b, valid_b = bp_to_idx(bps_b, positions_b, self.chrm_b.bin_size)
+
+
+    valid = np.logical_and(valid_a, valid_b)
+
+    idxs_a = idxs_a[valid]
+    idxs_b = idxs_b[valid]
+    counts = counts[valid]
+
+    mat = np.zeros((size_a, size_b), dtype=np.int64)
+
+    mat[idxs_a, idxs_b] = counts
+    if self.chrm_a.chrm == self.chrm_b.chrm:
+      mat[idxs_b, idxs_a] = counts
+
+    return(mat)
 
   @property
   def dists(self):

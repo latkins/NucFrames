@@ -372,7 +372,7 @@ class NucFrame(object):
     chrms :: ["X", "1", ..] -- all of the chromosomes that are present.
     bp_pos/chrm :: [Int] -- The start bp index of each particle in each chrm.
     position/chrm :: [[[Float]]] -- (model, bead_idx, xyz)
-    expr_contacts/chrm/chrm :: [[Int]] -- (bead_idx, bead_idx), raw contact count.
+    expr_contacts/chrm/chrm :: [[Int]] -- (bp, bp), raw contact count.
     dists/chrm/chrm :: [[Float]] -- (bead_idx, bead_idx), distanes between beads.
     depths/i/alpha :: Float -- alpha value used to calculate depths.
     depths/i/chrm/ :: [Float] -- (bead_idx, ), depth of point from surface i.
@@ -389,7 +389,7 @@ class NucFrame(object):
     if not chrm_limit_dict:
       chrm_limit_dict = {chrm: (None, None) for chrm in chromosomes}
 
-    self.chrms = Chromosomes(self.store, chromosomes, chrm_limit_dict)
+    self.chrms = ChromosomeGroup(self.store, chromosomes, chrm_limit_dict)
     self.trans = TransGroup(self.store, chromosomes, chrm_limit_dict)
 
     try:
@@ -431,7 +431,7 @@ class NucFrame(object):
     return (rmsd)
 
 
-class Chromosomes(object):
+class ChromosomeGroup(object):
   def __init__(self, store, chromosomes, chrm_limit_dict):
     self.store = store
     self.chrms = chromosomes
@@ -561,9 +561,11 @@ if __name__ == "__main__":
 
   for f in glob.glob("/mnt/SSD/LayeredNuc/frames/*.hdf5"):
      nf = NucFrame(f)
-     for t in nf.trans:
-       print(t.chrm_a.chrm, t.chrm_b.chrm)
-       print(t.dists.shape)
+     print(nf.cell_name)
+     b = nf.trans["1", "2"].expr_contacts.shape
+     c = nf.trans["1", "2"].dists.shape
+     print(b)
+     print(c)
 
   #all_exterior_depths()
 
