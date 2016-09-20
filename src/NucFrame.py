@@ -8,11 +8,11 @@ import networkx as nx
 import math
 from collections import defaultdict, deque, Counter
 
-from distance_utils.all_pairs_euc_dist import nuc_dist_pairs
-from depth_utils.alpha_shape import AlphaShape, circular_subgroup
-from depth_utils.point_surface_dist import points_tris_dists
-from Chromosome import Chromosome
-from Trans import Trans
+from .distance_utils.all_pairs_euc_dist import nuc_dist_pairs
+from .depth_utils.alpha_shape import AlphaShape, circular_subgroup
+from .depth_utils.point_surface_dist import points_tris_dists
+from .Chromosome import Chromosome
+from .Trans import Trans
 
 
 def surf_norm(tri):

@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import h5py
-from utils import bp_to_idx
+from .utils import bp_to_idx
 
 class PopNucFrame(object):
 

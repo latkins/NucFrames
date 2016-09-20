@@ -10,3 +10,9 @@ file can be directly loaded with NucFrame.\_\_init\_\_.
 A NucFrames object loads multiple NucFrame objects and ensures they have
 consistent start/end basepairs. It is created by passing in a list of NucFrame
 file locations, typically done with glob.glob("/path/to/files/*.hdf5").
+
+Install with:
+
+```
+python setup.py install
+```

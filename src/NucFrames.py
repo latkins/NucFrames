@@ -3,8 +3,8 @@ from collections import defaultdict
 import h5py
 from tqdm import tqdm
 
-from NucFrame import NucFrame
-from utils import bp_to_idx
+from .NucFrame import NucFrame
+from .utils import bp_to_idx
 
 class NucFrames(object):
   def __init__(self, nuc_frm_path_list):

@@ -1,8 +1,8 @@
 import numpy as np
 import os
 import h5py
-from Chromosome import Chromosome
-from utils import bp_to_idx
+from .Chromosome import Chromosome
+from .utils import bp_to_idx
 
 
 class Trans(object):
