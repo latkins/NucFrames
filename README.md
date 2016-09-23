@@ -1,4 +1,5 @@
 # NucFrames
+
 Utilities to help with analysing multiple single cell structures.
 Precomputes distances / depths for each .nuc file. 
 Helper functions for dealing with offset starts etc.
@@ -12,18 +13,18 @@ A NucFrames object loads multiple NucFrame objects and ensures they have
 consistent start/end basepairs. It is created by passing in a list of NucFrame
 file locations, typically done with glob.glob("/path/to/files/*.hdf5").
 
-Example analysis scripts can be found [here](https://github.com/latkins/SingleCellStructureAnalysis).
-
 ## Installation
-Install with:
 
-```
-python setup.py install
-```
+Requires python3. Using Anaconda to create a fresh environment, and then manage
+these requirements, is suggested. All packages can be installed with pip or
+conda.
 
-Requirements:
+Run ```python setup.py install``` to install.
 
-* Python3
+### Python Packages
+
+
+Pip packabes:
 * numpy
 * scipy
 * numba (>= 0.29.0, installable via ```conda install -c https://conda.anaconda.org/numba numba```)
@@ -33,4 +34,6 @@ Requirements:
 * pandas
 * hypothesis
 
-Using Anaconda to manage these requirements is suggested.
+## Running
+
+Example analysis scripts using this library can be found [here](https://github.com/latkins/SingleCellStructureAnalysis).
