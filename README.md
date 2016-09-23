@@ -12,7 +12,7 @@ A NucFrames object loads multiple NucFrame objects and ensures they have
 consistent start/end basepairs. It is created by passing in a list of NucFrame
 file locations, typically done with glob.glob("/path/to/files/*.hdf5").
 
-Example analysis scripts can be found [here](https://github.com/latkins/nuc_frames).
+Example analysis scripts can be found [here](https://github.com/latkins/SingleCellStructureAnalysis).
 
 ## Installation
 Install with:
