@@ -23,8 +23,6 @@ Run ```python setup.py install``` to install.
 
 ### Python Packages
 
-
-Pip packabes:
 * numpy
 * scipy
 * numba (>= 0.29.0, installable via ```conda install -c https://conda.anaconda.org/numba numba```)
