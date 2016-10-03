@@ -17,11 +17,14 @@ file locations, typically done with glob.glob("/path/to/files/*.hdf5").
 
 Requires python3. Using Anaconda to create a fresh environment, and then manage
 these requirements, is suggested. All packages can be installed with pip or
-conda.
+conda. Anaconda can be downloaded
+from [https://www.continuum.io/downloads](https://www.continuum.io/downloads).
 
-Run ```python setup.py install``` to install.
+Having cloned the repository with ```git clone```, run ```python setup.py
+install``` to install. Before running any code, install the dependencies listed
+below.
 
-### Python Packages
+### Dependencies
 
 * numpy
 * scipy
@@ -34,4 +37,6 @@ Run ```python setup.py install``` to install.
 
 ## Running
 
-Example analysis scripts using this library can be found [here](https://github.com/latkins/SingleCellStructureAnalysis).
+Once the package and dependencies are installed, the package can be used.
+Example analysis scripts using this library can be
+found [here](https://github.com/latkins/SingleCellStructureAnalysis).
