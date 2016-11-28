@@ -55,7 +55,6 @@ class NucFrame(object):
     cls._store_expr_contacts(nuc_file, store, chrms)
     cls._store_dists(nuc_file, store, chrms)
     cls._store_positions(nuc_file, store, chrms)
-    cls._store_alpha_shape(store, chrms)
     return (cls(nuc_slice_file))
 
   @staticmethod

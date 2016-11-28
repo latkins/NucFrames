@@ -57,7 +57,7 @@ class Chromosome(object):
 
   @property
   def cell(self):
-    return(self.store["name"][()])
+    return(self.store.attrs["name"])
 
   @property
   def bp_pos(self):
