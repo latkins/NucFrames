@@ -69,7 +69,7 @@ class NucFrames(object):
       for value_idx, (start, end) in enumerate(zip(starts, ends)):
         if start > end:
           start, end = end, start
-        track_region_bps = np.arange(start, end, 10000, dtype=np.int32) # TODO: Hard coding here is bad.
+        track_region_bps = np.arange(start, end, 1000, dtype=np.int32) # TODO: Hard coding here is bad.
         idxs, valid = bp_to_idx(track_region_bps, chrm_bps, bin_size=self.bin_size)
         idxs = np.unique(idxs[valid])
         if binary:

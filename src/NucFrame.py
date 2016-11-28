@@ -155,8 +155,8 @@ class NucFrame(object):
     for chrm in chrms:
       position_path = os.path.join("position", chrm)
       store.create_dataset(position_path, data=f[chrm])
-      logging.info("Created positions for chrm {} in {}".format(chrm, store[
-          "name"]))
+      logging.info("Created positions for chrm {} in {}".format(chrm,
+          store.attrs["name"]))
 
   def _store_alpha_shape(self, rmsd_lim=5):
     """Calculates and stores an AlphaShape.
