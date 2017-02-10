@@ -525,21 +525,3 @@ def make_frames(slice_path):
       nf = NucFrame.from_nuc(nuc_file, slice_file)
     except ValueError as e:
       print(e)
-
-
-if __name__ == "__main__":
-  import glob
-
-  for f in glob.glob("/mnt/SSD/LayeredNuc/frames/*.hdf5"):
-    nf = NucFrame(f)
-    print(nf.cell_name)
-    b = nf.trans["1", "2"].expr_contacts.shape
-    c = nf.trans["1", "2"].dists.shape
-    print(b)
-    print(c)
-
-  #all_exterior_depths()
-
-  #logging.basicConfig(level=logging.INFO)
-  #slice_path = "/mnt/SSD/LayeredNuc/void_alpha_frames/"
-  #make_frames(slice_path)

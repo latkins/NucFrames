@@ -1,0 +1,26 @@
+#!/usr/bin/env python
+import argparse
+import logging
+from tqdm import tqdm
+import glob
+import os
+
+from NucFrames import NucFrame
+
+
+if __name__ == "__main__":
+  parser = argparse.ArgumentParser(description="Create NucFrames from nucleus files.")
+  parser.add_argument("--src", "-s", help="Source diretory", type=str, required=True)
+  parser.add_argument("--dst", "-d", help="Destination diretory", type=str, required=True)
+  parser.add_argument("-v", help="Verbose mode.", action="store_true")
+
+  args = parser.parse_args()
+
+  if args.v:
+    logging.basicConfig(level=logging.INFO)
+
+  for nuc_file in tqdm(glob.iglob(os.path.join(args.src, "*"))):
+    name = os.path.splitext(os.path.basename(nuc_file))[0]
+    frame_file = os.path.join(args.dst, name + ".hdf5")
+    nf = NucFrame.from_nuc(nuc_file, frame_file)
+    logging.info("Created {} from {}".format(frame_file, nuc_file))
