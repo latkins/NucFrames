@@ -1,4 +1,5 @@
 from distutils.core import setup
+
 setup(name='NucFrames',
       version='0.1',
       package_dir={'NucFrames': 'src'},
