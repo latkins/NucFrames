@@ -19,7 +19,7 @@ if __name__ == "__main__":
   if args.v:
     logging.basicConfig(level=logging.INFO)
 
-  for nuc_file in tqdm(glob.iglob(os.path.join(args.src, "*"))):
+  for nuc_file in tqdm(glob.iglob(os.path.join(args.src, "*.nuc"))):
     name = os.path.splitext(os.path.basename(nuc_file))[0]
     frame_file = os.path.join(args.dst, name + ".hdf5")
     nf = NucFrame.from_nuc(nuc_file, frame_file)
