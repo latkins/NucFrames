@@ -362,7 +362,7 @@ class NucFrame(object):
     surface_dist/alpha_val/i/surface_size :: size of surface i for alpha
     """
     self.alpha_shape = None
-    self.store = h5py.File(nuc_slice_file, mode, libvar="latest")
+    self.store = h5py.File(nuc_slice_file, mode=mode, libvar="latest")
     self.nuc_slice_file = nuc_slice_file
     chromosomes = [x.decode("utf-8") for x in self.store["chrms"]]
     if not chrm_limit_dict:
