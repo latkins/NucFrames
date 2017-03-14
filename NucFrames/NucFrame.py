@@ -363,6 +363,7 @@ class NucFrame(object):
     """
     self.alpha_shape = None
     self.store = h5py.File(nuc_slice_file, mode=mode, libvar="latest")
+    self.bin_size = self.store["bin_size"].value
     self.nuc_slice_file = nuc_slice_file
     chromosomes = [x.decode("utf-8") for x in self.store["chrms"]]
     if not chrm_limit_dict:

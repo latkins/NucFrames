@@ -11,16 +11,18 @@ class NucFrames(object):
   def __init__(self, nuc_frm_path_list):
     self.nuc_frm_path_list = nuc_frm_path_list
 
-    bin_sizes = {x.bin_size for x in self}
-    if len(bin_sizes) == 1:
-      self.bin_size = bin_sizes[0]
-    else:
-      raise ValueError("NucFrames of different sizes added.")
 
     self.chrm_limit_dict = None
     self.common_chrms = self._calc_common_chrms()
     self.chrm_limit_dict = self._calc_chrm_limit_dict()
     self.tracks = {}
+
+    bin_sizes = list({x.bin_size for x in self})
+    if len(bin_sizes) == 1:
+      self.bin_size = bin_sizes[0]
+    else:
+      raise ValueError("NucFrames of different sizes added.")
+
 
   def _calc_chrm_limit_dict(self):
     """
