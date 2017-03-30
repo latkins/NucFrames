@@ -45,7 +45,7 @@ class NucFrame(object):
       # File didn't actually exist.
       pass
 
-    store = h5py.File(nuc_slice_file, 'a', libvar="latest")
+    store = h5py.File(nuc_slice_file, 'a', libver="latest")
 
     store["chrms"] = cls._extract_chrms(nuc_file)
     chrms = [x.decode("utf8") for x in store["chrms"]]
@@ -362,7 +362,7 @@ class NucFrame(object):
     surface_dist/alpha_val/i/surface_size :: size of surface i for alpha
     """
     self.alpha_shape = None
-    self.store = h5py.File(nuc_slice_file, mode=mode, libvar="latest")
+    self.store = h5py.File(nuc_slice_file, mode=mode, libver="latest")
     self.bin_size = self.store["bin_size"].value
     self.nuc_slice_file = nuc_slice_file
     chromosomes = [x.decode("utf-8") for x in self.store["chrms"]]
